@@ -1,0 +1,52 @@
+.likes-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 2rem;
+    margin-top: 2rem;
+}
+
+.like-card {
+    display: flex;
+    flex-direction: column;
+    padding: 1.5rem;
+}
+
+.like-card-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.like-card-header img {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    border: 3px solid #000;
+}
+
+.college-tag-sm {
+    background: var(--accent);
+    padding: 0.1rem 0.4rem;
+    font-weight: 800;
+    font-size: 0.8rem;
+    border: 2px solid #000;
+    display: inline-block;
+}
+
+.like-card-body {
+    flex: 1;
+    margin-bottom: 1.5rem;
+}
+
+.interest-chip-sm {
+    background: var(--secondary);
+    padding: 0.1rem 0.4rem;
+    border: 1px solid #000;
+    font-weight: 700;
+    font-size: 0.75rem;
+}
+
+.like-card-actions {
+    justify-content: space-between;
+}

@@ -1,0 +1,55 @@
+.home-dashboard {
+    padding-top: 2rem;
+    padding-bottom: 4rem;
+}
+
+.welcome-card {
+    margin-bottom: 2rem;
+}
+
+.welcome-card h1 {
+    font-size: 2.5rem;
+}
+
+.status-section {
+    margin-top: 2rem;
+}
+
+.active-match-info {
+    border-color: var(--highlight);
+    background: #fdf2ff;
+}
+
+.badge {
+    display: inline-block;
+    padding: 0.3rem 0.6rem;
+    background: var(--highlight);
+    color: #fff;
+    font-weight: 900;
+    text-transform: uppercase;
+    font-size: 0.8rem;
+    margin-bottom: 1rem;
+    border: 2px solid #000;
+}
+
+.home-grid {
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1.5rem;
+}
+
+.home-option {
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.home-option:hover {
+    background: var(--accent);
+}
+
+.home-option h3 {
+    margin-bottom: 0.5rem;
+}
+
+.mt-2 {
+    margin-top: 2rem;
+}

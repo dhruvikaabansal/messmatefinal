@@ -1,0 +1,140 @@
+@import url('https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;700;900&display=swap');
+
+:root {
+  --primary: #FF90E8; /* Pink */
+  --secondary: #7EE787; /* Green */
+  --accent: #FFD100; /* Yellow */
+  --highlight: #9747FF; /* Purple */
+  --background: #FFFFFF;
+  --text: #000000;
+  --border: 4px solid #000000;
+  --shadow: 8px 8px 0px #000000;
+  --shadow-sm: 4px 4px 0px #000000;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Public Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  background-color: var(--background);
+  color: var(--text);
+  line-height: 1.5;
+  overflow-x: hidden;
+}
+
+h1, h2, h3, h4 {
+  font-weight: 900;
+  text-transform: uppercase;
+  margin-bottom: 1rem;
+}
+
+/* Neubrutalist Components */
+.neo-card {
+  background: white;
+  border: var(--border);
+  box-shadow: var(--shadow);
+  padding: 1.5rem;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.neo-card:hover {
+  transform: translate(-4px, -4px);
+  box-shadow: 12px 12px 0px #000000;
+}
+
+.neo-btn {
+  font-family: inherit;
+  font-weight: 900;
+  padding: 0.8rem 1.5rem;
+  border: var(--border);
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  text-transform: uppercase;
+  transition: all 0.15s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.neo-btn:active {
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0px #000000;
+}
+
+.neo-btn-primary { background: var(--primary); }
+.neo-btn-secondary { background: var(--secondary); }
+.neo-btn-accent { background: var(--accent); }
+
+.neo-input {
+  width: 100%;
+  padding: 0.8rem;
+  border: var(--border);
+  font-family: inherit;
+  font-weight: 700;
+  outline: none;
+}
+
+.neo-input:focus {
+  background: #f0f0f0;
+}
+
+/* Layout Utilities */
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+.grid {
+  display: grid;
+  gap: 2rem;
+}
+
+.flex {
+  display: flex;
+  gap: 1rem;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 12px;
+}
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+::-webkit-scrollbar-thumb {
+  background: #000;
+  border: 3px solid #f1f1f1;
+}
+
+/* Onboarding Steps */
+.onboarding-steps {
+    display: flex;
+    justify-content: center;
+    gap: 1.5rem;
+    margin-bottom: 2.5rem;
+    flex-wrap: wrap;
+}
+
+.onboarding-steps .step {
+    padding: 0.5rem 1rem;
+    background: #fff;
+    border: 3px solid #000;
+    font-weight: 800;
+    box-shadow: var(--shadow-sm);
+    opacity: 0.5;
+    font-size: 0.9rem;
+}
+
+.onboarding-steps .step.active {
+    background: var(--highlight);
+    color: #fff;
+    opacity: 1;
+    transform: translate(-2px, -2px);
+    box-shadow: 6px 6px 0px #000;
+}

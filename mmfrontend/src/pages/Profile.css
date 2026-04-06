@@ -1,0 +1,262 @@
+.profile-setup {
+    padding-top: 2rem;
+    padding-bottom: 4rem;
+}
+
+.onboarding-steps {
+    display: flex;
+    justify-content: center;
+    gap: 2rem;
+    margin-bottom: 3rem;
+    flex-wrap: wrap;
+}
+
+.onboarding-steps .step {
+    padding: 0.5rem 1rem;
+    background: #fff;
+    border: 3px solid #000;
+    font-weight: 800;
+    box-shadow: 4px 4px 0px #000;
+    opacity: 0.5;
+}
+
+.onboarding-steps .step.active {
+    background: var(--highlight);
+    color: #fff;
+    opacity: 1;
+    transform: translate(-3px, -3px);
+    box-shadow: 7px 7px 0px #000;
+}
+
+/* Step completed (edit mode) */
+.onboarding-steps .step.done {
+    background: #e8ffe8;
+    color: #1a7a1a;
+    border-color: #1a7a1a;
+    box-shadow: 4px 4px 0px #1a7a1a;
+    opacity: 1;
+}
+
+/* Clickable steps in edit mode */
+.onboarding-steps .step.clickable {
+    cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.onboarding-steps .step.clickable:hover {
+    transform: translate(-2px, -2px);
+    box-shadow: 6px 6px 0px #000;
+}
+
+/* Edit mode info banner */
+.edit-mode-banner {
+    max-width: 700px;
+    margin: 0 auto 1.5rem;
+    padding: 0.75rem 1.25rem;
+    background: #fff8e6;
+    border: 2px solid #f0a500;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: #7a5500;
+    box-shadow: 3px 3px 0 #f0a500;
+}
+
+.profile-card {
+    max-width: 700px;
+    margin: 0 auto;
+}
+
+/* Profile Pic Preview */
+.pic-preview-container {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 0.5rem;
+}
+
+.pic-preview {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    border: 3px solid #000;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+.pic-preview-label {
+    font-weight: 700;
+    font-size: 0.85rem;
+    color: #555;
+}
+
+/* Interests */
+.interests-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.interest-count {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #888;
+    background: #f0f0f0;
+    padding: 2px 8px;
+    border-radius: 999px;
+    border: 1px solid #ccc;
+}
+
+.selected-interests-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    padding: 0.75rem;
+    background: #fff8f0;
+    border: 2px dashed var(--highlight, #ff69b4);
+    border-radius: 8px;
+}
+
+.interests-chips-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+.interest-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.3rem 0.75rem;
+    background: var(--highlight, #ff69b4);
+    color: #fff;
+    border: 2px solid #000;
+    border-radius: 999px;
+    font-weight: 700;
+    font-size: 0.8rem;
+    cursor: pointer;
+    box-shadow: 2px 2px 0 #000;
+    transition: transform 0.1s, box-shadow 0.1s;
+}
+
+.interest-chip:hover {
+    transform: translate(-1px, -1px);
+    box-shadow: 3px 3px 0 #000;
+}
+
+.interest-chip-btn {
+    padding: 0.4rem 0.9rem;
+    background: #fff;
+    color: #000;
+    border: 2px solid #000;
+    border-radius: 999px;
+    font-weight: 700;
+    font-size: 0.82rem;
+    cursor: pointer;
+    box-shadow: 2px 2px 0 #000;
+    transition: all 0.15s;
+    font-family: inherit;
+}
+
+.interest-chip-btn:hover {
+    transform: translate(-1px, -1px);
+    box-shadow: 3px 3px 0 #000;
+    background: #f9f9f9;
+}
+
+.interest-chip-btn.selected {
+    background: var(--highlight, #ff69b4);
+    color: #fff;
+    transform: translate(-1px, -1px);
+    box-shadow: 3px 3px 0 #000;
+}
+
+.hint-text {
+    font-size: 0.78rem;
+    color: #888;
+    margin-top: 0.5rem;
+}
+
+/* Action buttons at bottom */
+.profile-action-btns {
+    display: flex;
+    gap: 1rem;
+    margin-top: 2rem;
+    flex-wrap: wrap;
+}
+
+.profile-action-btns .neo-btn {
+    flex: 1;
+    text-align: center;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.neo-btn-outline {
+    background: transparent;
+    border: 3px solid #000;
+    color: #000;
+    font-weight: 800;
+    padding: 0.75rem 1.5rem;
+    box-shadow: 4px 4px 0 #000;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.15s;
+}
+
+.neo-btn-outline:hover {
+    transform: translate(-2px, -2px);
+    box-shadow: 6px 6px 0 #000;
+}
+
+.w-full {
+    width: 100%;
+}
+
+/* =========================================
+   PROFILE PREVIEW DECK (same look as Discover)
+   ========================================= */
+.profile-preview-page {
+    padding-top: 2rem;
+    padding-bottom: 6rem;
+    max-width: 480px;
+    margin: 0 auto;
+}
+
+.preview-header {
+    text-align: center;
+    margin-bottom: 1.5rem;
+}
+
+.preview-header h2 {
+    font-size: 1.5rem;
+    font-weight: 900;
+}
+
+.preview-header p {
+    color: #666;
+    font-size: 0.9rem;
+    margin-top: 0.25rem;
+}
+
+.preview-badge {
+    display: inline-block;
+    margin-top: 0.5rem;
+    padding: 0.35rem 1rem;
+    background: var(--highlight, #ff69b4);
+    color: #fff;
+    font-weight: 800;
+    border: 2px solid #000;
+    border-radius: 999px;
+    box-shadow: 3px 3px 0 #000;
+    font-size: 0.8rem;
+}
+
+.preview-back-btn {
+    display: block;
+    margin: 1.5rem auto 0;
+    text-align: center;
+}
