@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
+import { isMealTimePassed, MEAL_ORDER } from '../utils/mealTimeUtils';
 import './Community.css';
 import './Profile.css'; // Reusing profile chip styles if needed
 
@@ -21,9 +22,16 @@ const Community = () => {
     const [communities, setCommunities] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showCreateModal, setShowCreateModal] = useState(false);
-    const [newCommunity, setNewCommunity] = useState({ name: '', mealTime: 'lunch', mealDate: todayStr, description: '', interests: [] });
-    const [userHasCommunity, setUserHasCommunity] = useState(false);
-    const [activeMatch, setActiveMatch] = useState(null); // 🔥 Added for cross-exclusivity lock
+    const [newCommunity, setNewCommunity] = useState({ 
+        name: '', 
+        mealTime: 'lunch', 
+        mealDate: todayStr, 
+        description: '', 
+        interests: [],
+        maxMembers: 4
+    });
+    const [userHasCommunityInSlot, setUserHasCommunityInSlot] = useState(false);
+    const [activeMatches, setActiveMatches] = useState([]); // 🔥 Changed to plural for date-time check
 
     const toggleInterest = (interest) => {
         if (newCommunity.interests.includes(interest)) {
@@ -39,26 +47,34 @@ const Community = () => {
 
     const fetchCommunities = async () => {
         try {
-            // 1. Get user profile to check for active 1-on-1 match
+            // 1. Get user profile and matches for exclusivity logic
             const userRes = await api.get('/user/profile');
             const userData = userRes.data?.profile || userRes.data;
-            setActiveMatch(userData.activeMatch || null);
+            
+            const matchListRes = await api.get('/match/list');
+            const activeMatchList = (matchListRes.data.matches || []).filter(m => m.status === 'active');
+            setActiveMatches(activeMatchList);
 
             // 2. Get user preferences for filtering
-            const prefData = userData.preferences || (await api.get('/preferences')).data;
-            const mealTime = prefData?.mealTime || 'lunch';
-            const mealDate = prefData?.mealDate || todayStr;
+            const prefRes = await api.get('/preferences');
+            const prefData = prefRes.data?.preferences || prefRes.data;
+            const mealTimeParam = prefData?.mealTime || 'lunch';
+            const mealDateParam = prefData?.mealDate || todayStr;
             
             // Set defaults for create modal based on preferences
-            setNewCommunity(prev => ({ ...prev, mealTime, mealDate }));
+            setNewCommunity(prev => ({ 
+                ...prev, 
+                mealTime: isMealTimePassed(mealTimeParam, mealDateParam) ? (MEAL_ORDER.find(m => !isMealTimePassed(m, mealDateParam)) || 'dinner') : mealTimeParam, 
+                mealDate: mealDateParam 
+            }));
             
-            // 2. Get filtered communities
-            const res = await api.get(`/community?mealTime=${mealTime}&mealDate=${mealDate}`);
+            // 3. Get filtered communities
+            const res = await api.get(`/community?mealTime=${mealTimeParam}&mealDate=${mealDateParam}`);
             setCommunities(res.data.communities);
             
-            // Check if user is already in any community returned
-            const inCommunity = res.data.communities.some(c => c.isMember || c.isCreator);
-            setUserHasCommunity(inCommunity);
+            // Check if user is already in any community for this SPECIFIC slot
+            const inCommunityInSlot = res.data.communities.some(c => c.isMember || c.isCreator);
+            setUserHasCommunityInSlot(inCommunityInSlot);
             
             setLoading(false);
         } catch (err) {
@@ -99,9 +115,9 @@ const Community = () => {
     const handleCreate = async (e) => {
         e.preventDefault();
         try {
-            const res = await api.post('/community/create', newCommunity);
+            await api.post('/community/create', newCommunity);
             setShowCreateModal(false);
-            setNewCommunity({ name: '', mealTime: 'lunch', mealDate: todayStr, description: '', interests: [] });
+            setNewCommunity({ name: '', mealTime: 'lunch', mealDate: todayStr, description: '', interests: [], maxMembers: 4 });
             fetchCommunities();
         } catch (err) {
             alert(err.response?.data?.message || 'Error creating community');
@@ -110,32 +126,25 @@ const Community = () => {
 
     if (loading) return <div className="container">Loading Communities...</div>;
 
-    if (activeMatch) {
-        return (
-            <div className="container community-locked">
-                <div className="neo-card active-match-card">
-                    <h1>🔒 Community Locked</h1>
-                    <p>You have an active 1-on-1 match! Complete or unmatch your current partner to join group meals.</p>
-                    <div className="mt-2">
-                         <button className="neo-btn neo-btn-primary" onClick={() => navigate('/discover')}>
-                            View My Match
-                         </button>
-                    </div>
-                </div>
-            </div>
-        );
-    }
+    const isSlotLockedByMatch = (time, date) => {
+        return activeMatches.some(m => m.mealTime === time && m.mealDate === date);
+    };
 
     return (
         <div className="container">
             <div className="community-header">
-                <h1>Community Meals 👥</h1>
+                <div className="header-info">
+                    <h1>Community Meals 👥</h1>
+                    <p className="header-subtitle">Join or create a group table for your next meal.</p>
+                </div>
                 <button 
                     className="neo-btn neo-btn-secondary" 
                     onClick={() => setShowCreateModal(true)}
-                    disabled={userHasCommunity}
+                    disabled={userHasCommunityInSlot || isSlotLockedByMatch(newCommunity.mealTime, newCommunity.mealDate)}
                 >
-                    {userHasCommunity ? "+ Already in Group" : "+ Create Group"}
+                    {userHasCommunityInSlot ? "✓ Already in Group" : 
+                     isSlotLockedByMatch(newCommunity.mealTime, newCommunity.mealDate) ? "🔒 Timeslot Matched" :
+                     "+ Create Group"}
                 </button>
             </div>
 
@@ -165,11 +174,12 @@ const Community = () => {
                                     {c.interests.map((i, idx) => <span key={idx} className="interest-chip" style={{fontSize: '0.7rem', padding: '0.2rem 0.5rem'}}>{i}</span>)}
                                 </div>
                             )}
-                            <div className="members-count">
-                                👥 {c.members.length} members
+                             <div className="members-count">
+                                👥 {c.members.length} / {c.maxMembers || 4} members 
+                                {c.members.length >= (c.maxMembers || 4) && <span className="full-label"> (FULL)</span>}
                             </div>
                             <div className="created-by">
-                                Created by: {c.createdBy?.name || 'Anonymous'}
+                                Organizer: {c.createdBy?.name || 'Anonymous'}
                             </div>
 
                             <div className="community-actions mt-2">
@@ -185,9 +195,11 @@ const Community = () => {
                                     <button 
                                         className="neo-btn neo-btn-primary" 
                                         onClick={() => handleJoin(c._id)}
-                                        disabled={userHasCommunity}
+                                        disabled={userHasCommunityInSlot || isSlotLockedByMatch(c.mealTime, c.mealDate) || (c.members.length >= (c.maxMembers || 4))}
                                     >
-                                        {userHasCommunity ? 'Cannot Join' : 'Join Group'}
+                                        {userHasCommunityInSlot ? 'Already in Group' : 
+                                         isSlotLockedByMatch(c.mealTime, c.mealDate) ? 'Timeslot Matched' :
+                                         (c.members.length >= (c.maxMembers || 4)) ? 'Group Full' : 'Join Group'}
                                     </button>
                                 )}
                             </div>
@@ -212,16 +224,15 @@ const Community = () => {
                             </div>
                             <div className="form-group flex-group">
                                 <div>
-                                    <label>Meal Time</label>
                                     <select 
                                         className="neo-input"
                                         value={newCommunity.mealTime}
                                         onChange={(e) => setNewCommunity({...newCommunity, mealTime: e.target.value})}
                                     >
-                                        <option value="breakfast">Breakfast</option>
-                                        <option value="lunch">Lunch</option>
-                                        <option value="snacks">Snacks</option>
-                                        <option value="dinner">Dinner</option>
+                                        <option value="breakfast" disabled={isMealTimePassed('breakfast', newCommunity.mealDate)}>Breakfast {isMealTimePassed('breakfast', newCommunity.mealDate) ? '(Passed)' : ''}</option>
+                                        <option value="lunch" disabled={isMealTimePassed('lunch', newCommunity.mealDate)}>Lunch {isMealTimePassed('lunch', newCommunity.mealDate) ? '(Passed)' : ''}</option>
+                                        <option value="snacks" disabled={isMealTimePassed('snacks', newCommunity.mealDate)}>Snacks {isMealTimePassed('snacks', newCommunity.mealDate) ? '(Passed)' : ''}</option>
+                                        <option value="dinner" disabled={isMealTimePassed('dinner', newCommunity.mealDate)}>Dinner {isMealTimePassed('dinner', newCommunity.mealDate) ? '(Passed)' : ''}</option>
                                     </select>
                                 </div>
                                 <div style={{marginLeft: '1rem', flex: 1}}>
@@ -235,6 +246,18 @@ const Community = () => {
                                         <option value={tomorrowStr}>Tomorrow ({tomorrowDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })})</option>
                                     </select>
                                 </div>
+                            </div>
+                            <div className="form-group">
+                                <label>Max Members (2-10)</label>
+                                <input 
+                                    type="number"
+                                    className="neo-input"
+                                    value={newCommunity.maxMembers}
+                                    onChange={(e) => setNewCommunity({...newCommunity, maxMembers: parseInt(e.target.value)})}
+                                    min="2"
+                                    max="10"
+                                    required
+                                />
                             </div>
                             <div className="form-group">
                                 <label>Description</label>

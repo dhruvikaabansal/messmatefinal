@@ -41,6 +41,12 @@ const communitySchema = new mongoose.Schema(
       type: [String],
       default: [],
     },
+    maxMembers: {
+      type: Number,
+      default: 4,
+      min: 2,
+      max: 10,
+    },
   },
   { timestamps: true }
 );

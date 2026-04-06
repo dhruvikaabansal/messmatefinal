@@ -38,7 +38,7 @@ const ProfilePreview = () => {
         </div>
     );
 
-    const avatarUrl = profile.profilePic || `https://i.pravatar.cc/400?u=${profile.email}`;
+    const avatarUrl = profile.profilePic || `https://ui-avatars.com/api/?background=eeafad&color=fff&name=${profile.name || 'User'}`;
 
     return (
         <div className="container profile-preview-page">

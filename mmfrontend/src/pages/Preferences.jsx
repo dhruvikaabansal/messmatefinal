@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import api from '../services/api';
+import { isMealTimePassed, MEAL_ORDER } from '../utils/mealTimeUtils';
 import './Profile.css'; // Reusing Profile layout
 
 const Preferences = () => {
@@ -49,6 +50,16 @@ const Preferences = () => {
         if (step === 2) return; // Already here
         if (step === 3) navigate('/discover');
     };
+
+    // Auto-fix if current selection is passed
+    useEffect(() => {
+        if (isMealTimePassed(formData.mealTime, formData.mealDate)) {
+            const nextAvailable = MEAL_ORDER.find(m => !isMealTimePassed(m, formData.mealDate));
+            if (nextAvailable) {
+                setFormData(prev => ({ ...prev, mealTime: nextAvailable }));
+            }
+        }
+    }, [formData.mealDate]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -106,10 +117,18 @@ const Preferences = () => {
                             value={formData.mealTime}
                             onChange={(e) => setFormData({...formData, mealTime: e.target.value})}
                         >
-                            <option value="breakfast">Breakfast 🍳</option>
-                            <option value="lunch">Lunch 🍱</option>
-                            <option value="snacks">Snacks 🥟</option>
-                            <option value="dinner">Dinner 🍛</option>
+                            <option value="breakfast" disabled={isMealTimePassed('breakfast', formData.mealDate)}>
+                                Breakfast 🍳 {isMealTimePassed('breakfast', formData.mealDate) ? '(Passed)' : ''}
+                            </option>
+                            <option value="lunch" disabled={isMealTimePassed('lunch', formData.mealDate)}>
+                                Lunch 🍱 {isMealTimePassed('lunch', formData.mealDate) ? '(Passed)' : ''}
+                            </option>
+                            <option value="snacks" disabled={isMealTimePassed('snacks', formData.mealDate)}>
+                                Snacks 🥟 {isMealTimePassed('snacks', formData.mealDate) ? '(Passed)' : ''}
+                            </option>
+                            <option value="dinner" disabled={isMealTimePassed('dinner', formData.mealDate)}>
+                                Dinner 🍛 {isMealTimePassed('dinner', formData.mealDate) ? '(Passed)' : ''}
+                            </option>
                         </select>
                     </div>
 

@@ -1,4 +1,5 @@
 const Community = require("../models/Community");
+const Match = require("../models/Match"); // 🔥 Added for cross-exclusivity check
 const cosineSimilarity = require("../utils/cosineSimilarity");
 
 // 🌐 BROWSE COMMUNITIES
@@ -45,34 +46,43 @@ const browseCommunities = async (req, res) => {
 // 🏛️ CREATE COMMUNITY
 const createCommunity = async (req, res) => {
   try {
-    const { name, mealTime, mealDate, description, interests } = req.body;
+    const { name, mealTime, mealDate, description, interests, maxMembers } = req.body;
     const userId = req.user._id;
 
     if (!name || !mealTime) {
       return res.status(400).json({ message: "Name and mealTime are required" });
     }
 
-    // 🚨 CROSS-EXCLUSIVITY: Block if already in a 1-on-1 match
-    if (req.user.activeMatch) {
-       return res.status(400).json({ message: "You have an active 1-on-1 match! 🔒 Complete or Unmatch first." });
+    // 🚨 DATE-TIME EXCLUSIVITY: Block if already in a 1-on-1 match for THIS SPECIFIC TIME slot
+    const activeMatchForSlot = await Match.findOne({ 
+        users: userId, 
+        status: "active",
+        mealDate: mealDate || new Date().toISOString().split('T')[0],
+        mealTime: mealTime
+    });
+
+    if (activeMatchForSlot) {
+       return res.status(400).json({ message: `You have a 1-on-1 match for ${mealTime}! 🔒 Complete or Unmatch first.` });
     }
 
-    // 🚨 STRICT EXCLUSIVITY: Check if user is already in a community ON THIS SPECIFIC DATE
+    // 🚨 STRICT EXCLUSIVITY: Check if user is already in a community for THIS SPECIFIC TIME
     const existing = await Community.findOne({ 
       members: userId,
-      mealDate: mealDate || new Date().toISOString().split('T')[0]
+      mealDate: mealDate || new Date().toISOString().split('T')[0],
+      mealTime: mealTime
     });
     if (existing) {
-        return res.status(400).json({ message: `You already have a community group for ${mealDate || 'today'}!` });
+        return res.status(400).json({ message: `You already have a community group for ${mealTime} on ${mealDate || 'today'}!` });
     }
 
     const newCommunity = await Community.create({
       name,
       mealTime,
-      college: req.user.college, // 🔥 Save college context
+      college: req.user.college.toLowerCase(),
       mealDate: mealDate || new Date().toISOString().split('T')[0],
       description,
       interests: interests || [],
+      maxMembers: maxMembers || 4,
       createdBy: userId,
       members: [userId],
     });
@@ -95,18 +105,30 @@ const joinCommunity = async (req, res) => {
       return res.status(404).json({ message: "Community not found" });
     }
 
-    // 🚨 CROSS-EXCLUSIVITY: Block if already in a 1-on-1 match
-    if (req.user.activeMatch) {
-       return res.status(400).json({ message: "You have an active 1-on-1 match! 🔒 Complete or Unmatch first." });
+    // 🚨 DATE-TIME EXCLUSIVITY: Block if already in a 1-on-1 match for THIS SPECIFIC TIME slot
+    const activeMatchForSlot = await Match.findOne({ 
+        users: userId, 
+        status: "active",
+        mealDate: community.mealDate,
+        mealTime: community.mealTime
+    });
+    if (activeMatchForSlot) {
+       return res.status(400).json({ message: `You have a 1-on-1 match for ${community.mealTime}! 🔒` });
     }
 
-    // 🚨 STRICT EXCLUSIVITY: Check if user is already in a community ON THIS SPECIFIC DATE
-    const alreadyInOnDate = await Community.findOne({ 
+    // 🚨 CAPACITY CHECK: Block if community is full
+    if (community.members.length >= community.maxMembers) {
+      return res.status(400).json({ message: "This group is already full! 🍱" });
+    }
+
+    // 🚨 STRICT EXCLUSIVITY: Check if user is already in a community for THIS SPECIFIC TIME slot
+    const alreadyInOnSlot = await Community.findOne({ 
       members: userId,
-      mealDate: community.mealDate
+      mealDate: community.mealDate,
+      mealTime: community.mealTime
     });
-    if (alreadyInOnDate) {
-        return res.status(400).json({ message: `You are already in a community group for ${community.mealDate}!` });
+    if (alreadyInOnSlot) {
+        return res.status(400).json({ message: `You are already in a group for ${community.mealTime} on ${community.mealDate}!` });
     }
 
     community.members.push(userId);

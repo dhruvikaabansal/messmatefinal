@@ -117,7 +117,7 @@ const Discover = () => {
                     </div>
 
                     <div className="match-profile-preview">
-                        {activeMatch.user.profilePic && <img src={activeMatch.user.profilePic} alt={activeMatch.user.name} />}
+                        {activeMatch.user.profilePic ? <img src={activeMatch.user.profilePic} alt={activeMatch.user.name} /> : <img src={`https://ui-avatars.com/api/?background=eeafad&color=fff&name=${activeMatch.user.name}`} alt={activeMatch.user.name} />}
                         <div className="preview-info">
                             <h3>{activeMatch.user.name}, {activeMatch.user.age}</h3>
                             <p>{activeMatch.user.college}</p>
@@ -205,7 +205,7 @@ const Discover = () => {
                         {/* 🖼️ Profile Section 1: LARGE IMAGE */}
                         <section className="profile-hero neo-card">
                             <div className="image-wrapper">
-                                <img src={currentUser.profilePic} alt={currentUser.name} />
+                                <img src={currentUser.profilePic || `https://ui-avatars.com/api/?background=eeafad&color=fff&name=${currentUser.name}`} alt={currentUser.name} />
                                 <div className="hero-overlay">
                                     <h1>{currentUser.name}, {currentUser.age}</h1>
                                     <p className="college-tag">{currentUser.college}</p>

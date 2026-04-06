@@ -75,7 +75,7 @@ const LikesReceived = () => {
                     {likes.map(like => (
                         <div key={like._id || like.likeId} className="neo-card like-card">
                             <div className="like-card-header">
-                                <img src={like.profilePic || 'https://via.placeholder.com/150'} alt={like.name} />
+                                <img src={like.profilePic || `https://ui-avatars.com/api/?background=eeafad&color=fff&name=${like.name}`} alt={like.name} />
                                 <div>
                                     <h3>{like.name}, {like.age}</h3>
                                     <p className="college-tag-sm">{like.college}</p>

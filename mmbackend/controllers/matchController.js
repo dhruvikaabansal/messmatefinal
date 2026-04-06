@@ -16,36 +16,46 @@ const getCandidates = async (req, res) => {
        return res.json({ candidates: [], message: "Set your preferences first!" });
     }
 
-    // 🚨 EXCLUSIVE MATCH RULE: Block if already matched
-    if (currentUser.activeMatch) {
-       const activeMatch = await Match.findById(currentUser.activeMatch).populate("users");
-       const otherUser = activeMatch.users.find(u => u._id.toString() !== currentUser._id.toString());
-       
+    // 🚨 DATE-TIME EXCLUSIVITY RULE: Block if already matched for THIS SPECIFIC TIME slot
+    const activeMatchForSlot = await Match.findOne({ 
+        users: currentUser._id, 
+        status: "active",
+        mealDate: myPref.mealDate,
+        mealTime: myPref.mealTime 
+    }).populate("users");
+
+    if (activeMatchForSlot) {
+       const otherUser = activeMatchForSlot.users.find(u => u && u._id && u._id.toString() !== currentUser._id.toString());
        return res.json({ 
          candidates: [], 
-         message: "You already have an active match! 🔒 Complete or unmatch first.",
+         message: `You're already matched for ${myPref.mealTime} on ${myPref.mealDate}! 🔒`,
          isLocked: true,
          activeMatch: {
-             _id: activeMatch._id,
+             _id: activeMatchForSlot._id,
              user: otherUser,
-             mealTime: activeMatch.mealTime,
-             mealDate: activeMatch.mealDate
+             mealTime: activeMatchForSlot.mealTime,
+             mealDate: activeMatchForSlot.mealDate
          }
        });
     }
     
-    // 🚨 CROSS-EXCLUSIVITY RULE: Block Discover if in an active group meal
-    const activeCommunity = await Community.findOne({ members: currentUser._id });
-    if (activeCommunity) {
+    // 🚨 CROSS-EXCLUSIVITY: Block if in a group meal for THIS SPECIFIC TIME slot
+    const activeCommunityForSlot = await Community.findOne({ 
+        members: currentUser._id,
+        mealDate: myPref.mealDate,
+        mealTime: myPref.mealTime
+    });
+
+    if (activeCommunityForSlot) {
        return res.json({ 
          candidates: [], 
-         message: "You are already part of a Group Meal! 👥 Complete or Leave the group first.",
+         message: `You're already in a Group Meal for ${myPref.mealTime}! 👥`,
          isLocked: true,
          activeCommunity: {
-             _id: activeCommunity._id,
-             name: activeCommunity.name,
-             mealTime: activeCommunity.mealTime,
-             mealDate: activeCommunity.mealDate
+             _id: activeCommunityForSlot._id,
+             name: activeCommunityForSlot.name,
+             mealTime: activeCommunityForSlot.mealTime,
+             mealDate: activeCommunityForSlot.mealDate
          }
        });
     }
@@ -124,18 +134,46 @@ const likeUser = async (req, res) => {
     }
 
     const currentUser = await User.findById(fromUserId);
-    if (currentUser.activeMatch) {
-       return res.status(400).json({ message: "You already have an active match! 🔒" });
+    const myPref = await Preference.findOne({ user: fromUserId });
+
+    // 🚨 EXCLUSIVE MATCH RULE: Check same time slot for 1-on-1
+    const activeMatchForSlot = await Match.findOne({ 
+        users: fromUserId, 
+        status: "active",
+        mealDate: myPref?.mealDate,
+        mealTime: myPref?.mealTime 
+    });
+    if (activeMatchForSlot) {
+       return res.status(400).json({ message: "You already have a 1-on-1 match for this time slot! 🔒" });
     }
     
-    // 🚨 CROSS-EXCLUSIVITY RULE: Block likes if in an active group meal
-    const activeCommunity = await Community.findOne({ members: fromUserId });
-    if (activeCommunity) {
-       return res.status(400).json({ message: "You are already part of a Group Meal! 👥 Complete or Leave the group first." });
+    // 🚨 CROSS-EXCLUSIVITY RULE: Check same time slot for Communities
+    const activeCommunityForSlot = await Community.findOne({ 
+        members: fromUserId,
+        mealDate: myPref?.mealDate,
+        mealTime: myPref?.mealTime
+    });
+    if (activeCommunityForSlot) {
+       return res.status(400).json({ message: "You are already in a Group Meal for this time slot! 👥" });
     }
-    const targetUserObj = await User.findById(targetUserId);
-    if (targetUserObj && targetUserObj.activeMatch) {
-       return res.status(400).json({ message: "This user already has an active match!" });
+    // 🚨 TARGET EXCLUSIVITY: Check if target user is free for THIS SLOT
+    const targetMatchForSlot = await Match.findOne({ 
+        users: targetUserId, 
+        status: "active",
+        mealDate: myPref?.mealDate,
+        mealTime: myPref?.mealTime
+    });
+    if (targetMatchForSlot) {
+       return res.status(400).json({ message: "This user already has a match for this time slot! 🍱" });
+    }
+
+    const targetCommunityForSlot = await Community.findOne({ 
+        members: targetUserId,
+        mealDate: myPref?.mealDate,
+        mealTime: myPref?.mealTime
+    });
+    if (targetCommunityForSlot) {
+       return res.status(400).json({ message: "This user is in a group meal for this time slot! 👥" });
     }
 
     // 1. Check if user already liked/skipped this person
@@ -208,12 +246,18 @@ const getLikesReceived = async (req, res) => {
   try {
     const currentUser = req.user;
 
-    // 🚨 EXCLUSIVE MATCH RULE: Block if already matched
-    if (currentUser.activeMatch) {
-       return res.json({ 
-         likes: [], 
-         isLocked: true 
-       });
+    // 🚨 SLOT-AWARE EXCLUSIVITY: Check if user is already matched for their CURRENT preferred slot
+    const pref = await Preference.findOne({ user: currentUser._id });
+    if (pref) {
+        const hasMatchInSlot = await Match.findOne({ 
+            users: currentUser._id, 
+            status: "active",
+            mealDate: pref.mealDate,
+            mealTime: pref.mealTime 
+        });
+        if (hasMatchInSlot) {
+            return res.json({ likes: [], isLocked: true, message: `You're already matched for ${pref.mealTime}! 🔒` });
+        }
     }
 
     const likes = await Like.find({
@@ -285,13 +329,15 @@ const getMatches = async (req, res) => {
 
     const cleanMatches = matches.map((match) => {
       const otherUser = match.users.find(
-        (u) => u._id.toString() !== currentUser._id.toString()
+        (u) => u && u._id && u._id.toString() !== currentUser._id.toString()
       );
       if (!otherUser) return null;
       return {
         _id: match._id,
         user: otherUser,
         mealTime: match.mealTime,
+        mealDate: match.mealDate,
+        status: match.status,
         createdAt: match.createdAt,
       };
     }).filter(Boolean);
