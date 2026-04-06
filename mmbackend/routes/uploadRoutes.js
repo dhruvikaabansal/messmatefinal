@@ -36,8 +36,8 @@ router.post('/', upload.single('profilePic'), (req, res) => {
     if (!req.file) {
       return res.status(400).json({ message: 'No file uploaded' });
     }
-    // Return the URL to access the image
-    const imageUrl = `http://localhost:5000/uploads/${req.file.filename}`;
+    // Return the relative URL to access the image (works for both local and production)
+    const imageUrl = `/uploads/${req.file.filename}`;
     res.status(200).json({ imageUrl });
   } catch (error) {
     console.error('Upload Error:', error);

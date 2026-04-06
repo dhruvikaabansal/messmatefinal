@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
+import api from '../services/api';
 import './Register.css';
 
 const Register = () => {
@@ -39,7 +40,7 @@ const Register = () => {
 
         try {
             const finalCollege = formData.college === 'Other' ? formData.otherCollege : formData.college;
-            const res = await axios.post('http://localhost:5000/api/auth/register', {
+            const res = await api.post('/auth/register', {
                 ...formData,
                 college: finalCollege
             });

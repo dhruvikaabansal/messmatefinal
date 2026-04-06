@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import api from '../services/api';
 import './Navbar.css';
 
 const Navbar = () => {
@@ -9,16 +10,25 @@ const Navbar = () => {
   const isActive = (path) => location.pathname === path;
 
   const [groupMode, setGroupMode] = React.useState(false);
+  const [profileComplete, setProfileComplete] = React.useState(false);
 
   React.useEffect(() => {
-    const checkPref = async () => {
+    const checkStatus = async () => {
       try {
-        const res = await api.get('/preferences');
-        if (res.data?.groupSize >= 3) setGroupMode(true);
+        // Check profile completeness for logo logic
+        const profRes = await api.get(`/user/profile?t=${new Date().getTime()}`);
+        const pData = profRes.data.profile;
+        if (pData && pData.age && pData.interests?.length > 0 && pData.profilePic) {
+            setProfileComplete(true);
+        }
+
+        // Check group mode for navigation
+        const prefRes = await api.get('/preferences');
+        if (prefRes.data?.groupSize >= 3) setGroupMode(true);
         else setGroupMode(false);
       } catch (err) {}
     };
-    if (token) checkPref();
+    if (token) checkStatus();
   }, [token, location.pathname]);
 
   const handleLogout = () => {
@@ -27,10 +37,10 @@ const Navbar = () => {
     window.location.href = '/';
   };
 
-  // Logo links home only when in dashboard routes OR when editing profile (mode=edit)
+  // Logo links home only when in dashboard routes OR when editing profile (mode=edit) OR if profile is already complete
   const isEditMode = new URLSearchParams(location.search).get('mode') === 'edit';
   const dashboardRoutes = ['/home', '/discover', '/matches', '/likes', '/community', '/profile/preview'];
-  const logoIsClickable = dashboardRoutes.includes(location.pathname) || isEditMode;
+  const logoIsClickable = dashboardRoutes.includes(location.pathname) || isEditMode || profileComplete;
 
   return (
     <nav className="neo-navbar">

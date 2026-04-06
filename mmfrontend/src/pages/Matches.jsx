@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import api from '../services/api';
+import { getProfilePic } from '../utils/imgUtils';
 import './Matches.css';
 
 const Matches = () => {
@@ -73,7 +74,7 @@ const Matches = () => {
             <AnimatePresence>
                 {activeMatches.map(match => {
                     const matchUser = match.user;
-                    const avatarUrl = matchUser?.profilePic || `https://ui-avatars.com/api/?background=eeafad&color=fff&name=${matchUser?.name || 'User'}`;
+                    const avatarUrl = getProfilePic(matchUser?.profilePic, matchUser?.name);
                     
                     return (
                         <motion.div
@@ -147,7 +148,7 @@ const Matches = () => {
                             return (
                                 <div key={m._id} className="past-match-card neo-card">
                                     <img
-                                        src={u.profilePic || `https://ui-avatars.com/api/?background=eeafad&color=fff&name=${u.name}`}
+                                        src={getProfilePic(u.profilePic, u.name)}
                                         alt={u.name}
                                         className="past-match-img"
                                     />

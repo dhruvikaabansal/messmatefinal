@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
+import api from '../services/api';
 import './Register.css'; // Reusing Register.css for consistency
 
 const Login = () => {
@@ -18,7 +19,7 @@ const Login = () => {
     const handleSubmit = async (e) => {
         e.preventDefault();
         try {
-            const res = await axios.post('http://localhost:5000/api/auth/login', formData);
+            const res = await api.post('/auth/login', formData);
             localStorage.setItem('token', res.data.token);
             navigate('/home'); // Direct landing on Home page
         } catch (err) {

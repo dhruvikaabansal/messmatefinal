@@ -8,6 +8,7 @@ const preferenceRoutes = require("./routes/preferenceRoutes");
 const matchRoutes = require("./routes/matchRoutes");
 const communityRoutes = require("./routes/communityRoutes");
 const uploadRoutes = require("./routes/uploadRoutes");
+const slotRoutes = require("./routes/slotRoutes"); // 🔥 NEW: Slot-based state API
 const path = require("path");
 const { runAutoCleanup } = require("./utils/cleanup");
 
@@ -20,7 +21,11 @@ connectDB();
 const app = express();
 
 // Middleware
-app.use(cors());
+app.use(cors({
+    origin: process.env.FRONTEND_URL || "*",
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    credentials: true
+}));
 app.use(express.json());
 app.use("/api/auth", authRoutes);
 app.use("/api/user", userRoutes);
@@ -28,6 +33,7 @@ app.use("/api/preferences", preferenceRoutes);
 app.use("/api/match", matchRoutes);
 app.use("/api/community", communityRoutes);
 app.use("/api/upload", uploadRoutes);
+app.use("/api/slot", slotRoutes); // 🔥 NEW: Unified slot status endpoint
 
 // Expose uploads directory statically
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));

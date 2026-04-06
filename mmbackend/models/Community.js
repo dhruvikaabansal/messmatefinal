@@ -1,5 +1,12 @@
 const mongoose = require("mongoose");
 
+/**
+ * Community — A group meal table created by a user.
+ *
+ * Communities are SLOT-SCOPED and TEMPORARY.
+ * They expire when the slot ends (via cleanup job).
+ * slotId format: "YYYY-MM-DD_mealType"
+ */
 const communitySchema = new mongoose.Schema(
   {
     name: {
@@ -7,6 +14,12 @@ const communitySchema = new mongoose.Schema(
       required: [true, "Community name is required"],
       trim: true,
     },
+    // 🔥 NEW: Canonical slot identifier (replaces separate mealTime + mealDate queries)
+    slotId: {
+      type: String,
+      // Not required — backward compat with existing communities
+    },
+    // Retained for human-readable display
     mealTime: {
       type: String,
       enum: ["breakfast", "lunch", "snacks", "dinner"],
@@ -50,5 +63,11 @@ const communitySchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+// Fast discovery by slot + college (most common query)
+communitySchema.index({ slotId: 1, college: 1 });
+
+// Fast cleanup of expired communities
+communitySchema.index({ slotId: 1 });
 
 module.exports = mongoose.model("Community", communitySchema);

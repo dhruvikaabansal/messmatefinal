@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import api from '../services/api';
-import { isMealTimePassed, MEAL_ORDER } from '../utils/mealTimeUtils';
+import { isMealTimePassed, MEAL_ORDER, getFirstAvailableMeal, getLocalDateStr } from '../utils/mealTimeUtils';
 import './Profile.css'; // Reusing Profile layout
 
 const Preferences = () => {
-    const todayStr = new Date().toISOString().split('T')[0];
+    // ✅ Use local date (IST), NOT toISOString() which returns UTC
+    const todayStr = getLocalDateStr();
     const tomorrowDate = new Date();
     tomorrowDate.setDate(tomorrowDate.getDate() + 1);
-    const tomorrowStr = tomorrowDate.toISOString().split('T')[0];
+    const tomorrowStr = getLocalDateStr(tomorrowDate);
 
     const [formData, setFormData] = useState({
         mealTime: 'lunch',
@@ -17,14 +18,36 @@ const Preferences = () => {
         mealDate: todayStr,
         isAvailable: true
     });
+
     const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const [showSaved, setShowSaved] = useState(false);
+    const [profileFilled, setProfileFilled] = useState(false);
     const navigate = useNavigate();
     const location = useLocation();
     const isEditMode = new URLSearchParams(location.search).get('mode') === 'edit';
 
     useEffect(() => {
-        const fetchPrefs = async () => {
+        // Initial setup for new user
+        if (!loading) {
+            setFormData(prev => ({
+                ...prev,
+                mealTime: getFirstAvailableMeal(prev.mealDate)
+            }));
+        }
+    }, [loading]);
+
+    useEffect(() => {
+        const fetchData = async () => {
             try {
+                // Fetch Profile Status
+                const profRes = await api.get(`/user/profile?t=${new Date().getTime()}`);
+                const pData = profRes.data.profile;
+                if (pData && pData.age && pData.college && pData.interests?.length > 0 && pData.profilePic) {
+                    setProfileFilled(true);
+                }
+
+                // Fetch Preferences
                 const res = await api.get('/preferences');
                 const data = res.data?.preferences || res.data;
                 if (data) {
@@ -41,14 +64,37 @@ const Preferences = () => {
                 setLoading(false);
             }
         };
-        fetchPrefs();
+        fetchData();
     }, []);
 
-    const handleStepClick = (step) => {
-        if (!isEditMode) return;
-        if (step === 1) navigate('/profile?mode=edit');
+    const handleStepClick = async (step) => {
+        // Auto-save before navigating
+        try {
+            setSaving(true);
+            await api.put('/preferences', formData);
+            setShowSaved(true);
+            setTimeout(() => setShowSaved(false), 2000);
+        } catch (err) {
+            console.error('Auto-save preferences failed', err);
+            alert('Wait! We couldn\'t save your preferences. Please check your internet or retry.');
+            setSaving(false);
+            return; // 🛑 BLOCK NAVIGATION
+        } finally {
+            setSaving(false);
+        }
+
+        if (step === 1) navigate(isEditMode ? '/profile?mode=edit' : '/profile');
         if (step === 2) return; // Already here
-        if (step === 3) navigate('/discover');
+        if (step === 3) {
+            if (!profileFilled) {
+                alert('Wait! You must complete your profile and add a photo before starting to match.');
+                navigate(isEditMode ? '/profile?mode=edit' : '/profile');
+                return;
+            }
+            // Navigate based on group size
+            if (formData.groupSize >= 3) navigate('/community');
+            else navigate('/discover');
+        }
     };
 
     // Auto-fix if current selection is passed
@@ -63,8 +109,17 @@ const Preferences = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        if (!profileFilled) {
+            alert('Wait! You must complete your profile (Step 1) including a photo before you can start matching.');
+            navigate('/profile?mode=edit');
+            return;
+        }
         try {
+            setSaving(true);
             await api.put('/preferences', formData);
+            setShowSaved(true);
+            setTimeout(() => setShowSaved(false), 2000);
+
             if (formData.groupSize >= 3) {
                 navigate('/community');
             } else if (isEditMode) {
@@ -74,6 +129,8 @@ const Preferences = () => {
             }
         } catch (err) {
             alert('Error updating preferences');
+        } finally {
+            setSaving(false);
         }
     };
 
@@ -98,6 +155,13 @@ const Preferences = () => {
                     3. Match
                 </span>
             </div>
+
+            {saving && (
+                <div className="saved-toast">⏳ Saving preferences...</div>
+            )}
+            {showSaved && (
+                <div className="saved-toast">✅ Changes Saved!</div>
+            )}
 
             {isEditMode && (
                 <div className="edit-mode-banner">

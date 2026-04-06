@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import api from '../services/api';
+import { getProfilePic } from '../utils/imgUtils';
 import './Profile.css';
 
 const PREDEFINED_INTERESTS = [
@@ -12,16 +13,21 @@ const PREDEFINED_INTERESTS = [
 
 const Profile = () => {
     const [formData, setFormData] = useState({
+        name: '', 
         age: '',
         gender: 'male',
         bio: '',
         interests: [],
         profilePic: '',
         college: '',
-        otherCollege: ''
+        otherCollege: '',
+        prompts: [{ question: 'My favorite food is...', answer: '' }]
     });
     const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const [showSaved, setShowSaved] = useState(false);
     const [uploadingImage, setUploadingImage] = useState(false);
+    const [isAgeLocked, setIsAgeLocked] = useState(false);
     const navigate = useNavigate();
     const location = useLocation();
     const isEditMode = new URLSearchParams(location.search).get('mode') === 'edit';
@@ -29,8 +35,8 @@ const Profile = () => {
     useEffect(() => {
         const fetchProfile = async () => {
             try {
-                const res = await api.get('/user/profile');
-                const data = res.data?.profile || res.data;
+                const res = await api.get(`/user/profile?t=${new Date().getTime()}`);
+                const data = res.data.profile;
                 if (data) {
                     const COLLEGE_OPTIONS = ["NIIT University", "IIT Delhi", "DTU", "NSUT", "SRCC"];
                     const matchedCollege = COLLEGE_OPTIONS.find(
@@ -38,14 +44,21 @@ const Profile = () => {
                     ) || data.college || '';
 
                     setFormData({
+                        name: data.name || '',
                         age: data.age || '',
                         gender: data.gender || 'male',
                         bio: data.bio || '',
                         interests: data.interests || [],
                         profilePic: data.profilePic || '',
                         college: matchedCollege,
-                        otherCollege: ''
+                        otherCollege: '',
+                        prompts: data.prompts?.length > 0 ? data.prompts : [{ question: 'My favorite food is...', answer: '' }]
                     });
+
+                    // 🚨 Lock Age if it's already set in the backend (standardize: 0, null, undefined)
+                    if (data.age) {
+                        setIsAgeLocked(true);
+                    }
                 }
                 setLoading(false);
             } catch (err) {
@@ -87,39 +100,85 @@ const Profile = () => {
         }
     };
 
-    const isProfileFilled = () => formData.age && formData.college && formData.interests.length > 0;
+    const isProfileFilled = () => formData.age && formData.college && formData.interests.length > 0 && formData.profilePic;
 
-    const handleStepClick = (step) => {
-        if (!isEditMode) return; // During first-time onboarding, steps are not clickable
-        if (step === 1) return; // Already on profile
-        if (step === 2) {
-            if (!isProfileFilled()) {
-                alert('Please fill in your age, college, and at least one interest before continuing.');
-                return;
-            }
-            navigate('/preferences?mode=edit');
+    const saveProfileData = async () => {
+        const finalCollege = formData.college === 'Other' ? formData.otherCollege : formData.college;
+        
+        // 1. Client-side validation
+        const numAge = Math.floor(Number(formData.age));
+        if (!formData.age || isNaN(numAge) || numAge < 16 || numAge > 50) {
+            alert('Please enter a valid age between 16 and 50.');
+            return false;
         }
-        if (step === 3) {
+
+        if (!formData.name.trim()) {
+            alert('Please enter your name.');
+            return false;
+        }
+
+        if (!finalCollege) {
+            alert('Please select or specify your college.');
+            return false;
+        }
+
+        try {
+            setSaving(true);
+            const res = await api.put('/user/profile', { 
+                ...formData, 
+                college: finalCollege,
+                age: numAge
+            });
+            
+            // Sync local state with server response (important for formatting/ID consistency)
+            const updatedProfile = res.data.profile;
+            if (updatedProfile) {
+                setFormData(prev => ({
+                    ...prev,
+                    age: updatedProfile.age,
+                    college: updatedProfile.college // Keep raw but state logic handles matching
+                }));
+                if (updatedProfile.age) setIsAgeLocked(true);
+            }
+
+            setShowSaved(true);
+            setTimeout(() => setShowSaved(false), 2000);
+            return true;
+        } catch (err) {
+            console.error('Save failed:', err);
+            const msg = err.response?.data?.message || 'Wait! We couldn\'t save your changes. Please retry.';
+            alert(msg);
+            return false;
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleStepClick = async (step) => {
+        if (step === 1) return; // Already on profile
+        
+        // Auto-save before navigating
+        const success = await saveProfileData();
+        if (!success) return; // 🛑 BLOCK NAVIGATION if save/validation fails
+
+        if (step === 2 || step === 3) {
             if (!isProfileFilled()) {
-                alert('Please complete your profile first.');
+                alert('Please fill in all required fields (age, college, interests, and profile picture) before moving forward.');
                 return;
             }
-            navigate('/discover');
+            navigate(isEditMode ? '/preferences?mode=edit' : '/preferences');
         }
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        try {
-            const finalCollege = formData.college === 'Other' ? formData.otherCollege : formData.college;
-            await api.put('/user/profile', { ...formData, college: finalCollege });
-            if (isEditMode) {
-                navigate('/home'); // Return to dashboard after editing
-            } else {
-                navigate('/preferences'); // Continue onboarding
-            }
-        } catch (err) {
-            alert('Error updating profile');
+        const success = await saveProfileData();
+        if (!success) return;
+
+        if (isEditMode) {
+            navigate('/home'); 
+        } else {
+            navigate('/preferences'); 
         }
     };
 
@@ -151,6 +210,13 @@ const Profile = () => {
                 </span>
             </div>
 
+            {saving && (
+                <div className="saved-toast">⏳ Saving your profile...</div>
+            )}
+            {showSaved && (
+                <div className="saved-toast">✅ Changes Saved!</div>
+            )}
+
             {isEditMode && (
                 <div className="edit-mode-banner">
                     ✏️ You're editing your profile. Changes are saved when you click "Save Profile".
@@ -163,6 +229,17 @@ const Profile = () => {
 
                 <form onSubmit={handleSubmit}>
                     <div className="form-group">
+                        <label>Display Name</label>
+                        <input
+                            className="neo-input"
+                            type="text"
+                            value={formData.name}
+                            onChange={(e) => setFormData({...formData, name: e.target.value})}
+                            required
+                        />
+                    </div>
+
+                    <div className="form-group">
                             <label>Age</label>
                             <input
                                 className="neo-input"
@@ -170,8 +247,16 @@ const Profile = () => {
                                 value={formData.age}
                                 onChange={(e) => setFormData({...formData, age: e.target.value})}
                                 required
-                                min="18"
+                                min="16"
+                                max="50"
+                                disabled={isAgeLocked}
+                                style={isAgeLocked ? { backgroundColor: 'var(--bg)', cursor: 'not-allowed', opacity: 0.7 } : {}}
                             />
+                            {isAgeLocked && (
+                                <small className="hint-text" style={{marginTop: '0.5rem', color: 'var(--text-dim)', fontStyle: 'italic', display: 'block'}}>
+                                    🔒 Age cannot be changed once set.
+                                </small>
+                            )}
                         </div>
 
                     <div className="form-grid">
@@ -202,10 +287,62 @@ const Profile = () => {
 
                     {formData.profilePic && (
                         <div className="form-group pic-preview-container">
-                            <img src={formData.profilePic} alt="Preview" className="pic-preview" />
+                            <img src={getProfilePic(formData.profilePic, formData.name)} alt="Preview" className="pic-preview" />
                             <p className="pic-preview-label">Profile Picture Preview</p>
                         </div>
                     )}
+
+                    <div className="form-group">
+                        <label>Profile Prompt (Tell people a bit more!)</label>
+                        {formData.prompts && formData.prompts.map((prompt, index) => (
+                            <div key={index} className="prompt-editor neo-card" style={{padding: '1rem', background: 'var(--bg)', marginBottom: '1rem'}}>
+                                <select 
+                                    className="neo-input" 
+                                    style={{marginBottom: '0.5rem'}}
+                                    value={prompt.question}
+                                    onChange={(e) => {
+                                        const newPrompts = [...formData.prompts];
+                                        newPrompts[index].question = e.target.value;
+                                        setFormData({...formData, prompts: newPrompts});
+                                    }}
+                                >
+                                    <option value="My favorite food is...">My favorite food is...</option>
+                                    <option value="One thing I can't live without is...">One thing I can't live without is...</option>
+                                    <option value="Typical weekend for me is...">Typical weekend for me is...</option>
+                                    <option value="I'm looking for someone who...">I'm looking for someone who...</option>
+                                </select>
+                                <input 
+                                    className="neo-input"
+                                    placeholder="Your answer..."
+                                    value={prompt.answer}
+                                    onChange={(e) => {
+                                        const newPrompts = [...formData.prompts];
+                                        newPrompts[index].answer = e.target.value;
+                                        setFormData({...formData, prompts: newPrompts});
+                                    }}
+                                />
+                                {formData.prompts.length > 1 && (
+                                    <button 
+                                        type="button" 
+                                        className="neo-btn-link" 
+                                        style={{marginTop: '0.5rem', color: 'red', border: 'none', background: 'none', cursor: 'pointer', fontSize: '0.8rem'}}
+                                        onClick={() => setFormData({...formData, prompts: formData.prompts.filter((_, i) => i !== index)})}
+                                    >
+                                        Remove Prompt
+                                    </button>
+                                )}
+                            </div>
+                        ))}
+                        <button 
+                            type="button" 
+                            className="neo-btn neo-btn-outline" 
+                            style={{width: '100%', marginBottom: '1rem', fontSize: '0.86rem'}}
+                            onClick={() => setFormData({...formData, prompts: [...formData.prompts, { question: "One thing I can't live without is...", answer: "" }]})}
+                            disabled={formData.prompts && formData.prompts.length >= 3}
+                        >
+                            + Add another prompt {formData.prompts && formData.prompts.length >= 3 ? '(Max 3)' : ''}
+                        </button>
+                    </div>
 
                     <div className="form-group">
                         <label>Bio (Short & Sweet)</label>

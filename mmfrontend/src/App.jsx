@@ -62,24 +62,25 @@ const DefaultRoute = () => {
   
       const check = async () => {
         try {
-          const profRes = await api.get('/user/profile');
-          const pData = profRes.data?.profile || profRes.data;
+          // Standardize and Cache-bust the profile check
+          const profRes = await api.get(`/user/profile?t=${new Date().getTime()}`);
+          const pData = profRes.data.profile; 
           
-          if (!pData || !pData.age || !pData.gender || !pData.interests || pData.interests.length === 0) {
+          if (!pData || !pData.age || !pData.college || !pData.interests || pData.interests.length === 0 || !pData.profilePic) {
             navigate('/profile', { replace: true });
             return;
           }
           
           try {
-            const prefRes = await api.get('/preferences');
-            const prefData = prefRes.data?.preferences || prefRes.data;
-            const gSize = prefData.groupSize || 2;
+            const prefRes = await api.get(`/preferences?t=${new Date().getTime()}`);
+            const prefData = prefRes.data?.preferences || prefRes.data; // handle both wrapped and raw response
+            const gSize = prefData?.groupSize || 2;
             if (gSize >= 3) {
                 navigate('/community', { replace: true });
             } else {
                 navigate('/home', { replace: true });
             }
-          } catch(err) {
+          } catch (err) {
             navigate('/preferences', { replace: true });
           }
         } catch (err) {

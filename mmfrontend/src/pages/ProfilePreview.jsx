@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import api from '../services/api';
+import { getProfilePic } from '../utils/imgUtils';
 import './Profile.css';
 import './Discover.css'; // reuse discover card styles
 
@@ -13,8 +14,8 @@ const ProfilePreview = () => {
     useEffect(() => {
         const fetchProfile = async () => {
             try {
-                const res = await api.get('/user/profile');
-                const data = res.data?.profile || res.data;
+                const res = await api.get(`/user/profile?t=${new Date().getTime()}`);
+                const data = res.data.profile;
                 setProfile(data);
                 setLoading(false);
             } catch (err) {
@@ -31,14 +32,14 @@ const ProfilePreview = () => {
             <div className="preview-header">
                 <h2>No Profile Found</h2>
                 <p>Set up your profile first before previewing.</p>
-                <button className="neo-btn neo-btn-secondary" onClick={() => navigate('/profile')}>
+                <button className="neo-btn neo-btn-secondary" onClick={() => navigate('/profile?mode=edit')}>
                     Set Up Profile
                 </button>
             </div>
         </div>
     );
 
-    const avatarUrl = profile.profilePic || `https://ui-avatars.com/api/?background=eeafad&color=fff&name=${profile.name || 'User'}`;
+    const avatarUrl = getProfilePic(profile.profilePic, profile.name);
 
     return (
         <div className="container profile-preview-page">
@@ -58,8 +59,8 @@ const ProfilePreview = () => {
                     <div className="image-wrapper">
                         <img src={avatarUrl} alt={profile.name} />
                         <div className="hero-overlay">
-                            <h1>{profile.name}, {profile.age || '?'}</h1>
-                            <p className="college-tag">{profile.college}</p>
+                            <h1>{profile.name || 'Anonymous'}, {profile.age || '?'}</h1>
+                            <p className="college-tag">{profile.college || 'No College'}</p>
                         </div>
                     </div>
                 </section>
@@ -96,7 +97,7 @@ const ProfilePreview = () => {
 
             {/* Back Buttons */}
             <div className="profile-action-btns preview-back-btn">
-                <button className="neo-btn neo-btn-secondary" onClick={() => navigate('/profile')}>
+                <button className="neo-btn neo-btn-secondary" onClick={() => navigate('/profile?mode=edit')}>
                     ← Edit Profile
                 </button>
                 <button className="neo-btn" onClick={() => navigate('/discover')}>
