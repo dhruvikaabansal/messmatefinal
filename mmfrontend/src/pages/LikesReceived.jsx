@@ -56,14 +56,19 @@ const LikesReceived = () => {
             <div className="container discover-page-v3 match-locked">
                 <div className="neo-card active-match-card">
                     <div className="match-header">
-                        <h1>🔒 {lockType === 'community' ? 'Group Mode Active' : 'Match Locked'}</h1>
+                        <h1>🔒 {lockType === 'group_mode' ? 'Group Mode Active' : (lockType === 'community' ? 'Group Mode Active' : 'Match Locked')}</h1>
                         <p>
-                            {lockType === 'community' 
-                              ? "You're already in a group meal for this slot! You cannot accept individual matches right now. 👥"
-                              : "You already have an active 1-1 match! You cannot accept new likes for this slot. 🔒"}
+                            {lockType === 'group_mode'
+                              ? "You're searching for group tables (size 3-4). Individual matching is disabled in this mode. 🍱"
+                              : (lockType === 'community' 
+                                ? "You're already in a group meal for this slot! You cannot accept individual matches right now. 👥"
+                                : "You already have an active 1-1 match! You cannot accept new likes for this slot. 🔒")}
                         </p>
-                        <button className="neo-btn neo-btn-primary" onClick={() => navigate(lockType === 'community' ? '/community' : '/matches')}>
-                            View Active {lockType === 'community' ? 'Group' : 'Match'}
+                        <button 
+                            className="neo-btn neo-btn-primary" 
+                            onClick={() => navigate(lockType === 'group_mode' ? '/preferences' : (lockType === 'community' ? '/community' : '/matches'))}
+                        >
+                            {lockType === 'group_mode' ? '🍱 Switch to Solo Mode' : (lockType === 'community' ? 'View Active Group' : 'View Active Match')}
                         </button>
                     </div>
                 </div>

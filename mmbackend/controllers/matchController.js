@@ -354,6 +354,16 @@ const getLikesReceived = async (req, res) => {
       return res.json({ likes: [], isLocked: true, lockType: 'community', message: "You're already in a group meal for this slot! 👥" });
     }
 
+    // 🆕 LOCK IF IN GROUP MODE: If user's current preference is for 3-4 members, block 1-1 matching.
+    if (pref && pref.groupSize >= 3) {
+      return res.json({ 
+        likes: [], 
+        isLocked: true, 
+        lockType: 'group_mode', 
+        message: "You're in Group Mode! Individual matching is disabled. Switch to Solo to see likes. 🍱" 
+      });
+    }
+
     const likes = await Like.find({
       toUser: currentUser._id,
       slotId,
