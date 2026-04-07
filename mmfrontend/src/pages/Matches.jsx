@@ -61,26 +61,6 @@ const Matches = () => {
         }
     };
 
-    const handleLeave = async (communityId) => {
-        if (!window.confirm('Are you sure you want to leave this group?')) return;
-        try {
-            await api.post('/community/leave', { communityId });
-            fetchMatches();
-        } catch (err) {
-            alert(err.response?.data?.message || 'Error leaving community');
-        }
-    };
-
-    const handleDissolve = async (communityId) => {
-        if (!window.confirm('WARNING: As the creator, dissolving this group will remove ALL members. Proceed?')) return;
-        try {
-            await api.delete('/community/dissolve', { data: { communityId } });
-            fetchMatches();
-        } catch (err) {
-            alert(err.response?.data?.message || 'Error dissolving community');
-        }
-    };
-
     if (loading) return <div className="container loader-container">Loading your matches... 💬</div>;
 
     return (
@@ -90,99 +70,58 @@ const Matches = () => {
                 <p>Your active meal partner and past connections.</p>
             </div>
 
-            {/* ===== ACTIVE MATCHES (Solo & Group) ===== */}
+            {/* ===== ACTIVE MATCHES ===== */}
             <AnimatePresence>
                 {activeMatches.map(match => {
-                    const isSolo = match.type === 'solo';
+                    const matchUser = match.user;
+                    const avatarUrl = getProfilePic(matchUser?.profilePic, matchUser?.name);
                     
-                    if (isSolo) {
-                        const matchUser = match.user;
-                        const avatarUrl = getProfilePic(matchUser?.profilePic, matchUser?.name);
-                        return (
-                            <motion.div
-                                key={match._id}
-                                initial={{ opacity: 0, y: 20 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                exit={{ opacity: 0, scale: 0.95 }}
-                                className="active-match-section"
-                            >
-                                <div className="section-label active-label">🔒 1-on-1 Match - {match.mealTime}</div>
-                                <div className="active-match-card-wrap">
-                                    <div className="match-hero-img">
-                                        <img src={avatarUrl} alt={matchUser.name} />
-                                        <div className="match-hero-overlay">
-                                            <h2>{matchUser.name}, {matchUser.age}</h2>
-                                            <span className="match-college-chip">📍 {matchUser.college?.toUpperCase()}</span>
-                                        </div>
-                                        <div className="active-badge">🔒 {match.mealTime?.toUpperCase()} · {match.mealDate}</div>
-                                    </div>
+                    return (
+                        <motion.div
+                            key={match._id}
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.95 }}
+                            className="active-match-section"
+                            style={{ marginBottom: '3rem' }}
+                        >
+                            <div className="section-label active-label">🔒 Active Match - {match.mealTime}</div>
 
-                                    <div className="match-meal-info neo-card">
-                                        <span className="meal-info-icon">🍱</span>
-                                        <div>
-                                            <p className="meal-info-label">Matching for</p>
-                                            <p className="meal-info-value">{match.mealTime?.charAt(0).toUpperCase() + match.mealTime?.slice(1)} · {match.mealDate}</p>
-                                        </div>
+                            <div className="active-match-card-wrap">
+                                <div className="match-hero-img">
+                                    <img src={avatarUrl} alt={matchUser.name} />
+                                    <div className="match-hero-overlay">
+                                        <h2>{matchUser.name}, {matchUser.age}</h2>
+                                        <span className="match-college-chip">📍 {matchUser.college?.toUpperCase()}</span>
                                     </div>
+                                    <div className="active-badge">🔒 {match.mealTime?.toUpperCase()} · {match.mealDate}</div>
+                                </div>
 
-                                    <div className="match-action-btns">
-                                        <button className="neo-btn neo-btn-secondary match-btn-success" onClick={() => handleComplete(match._id)}>
-                                            ✅ Meal Successful!
-                                        </button>
-                                        <button className="neo-btn neo-btn-outline match-btn-unmatch" onClick={() => handleUnmatch(match._id)}>
-                                            💔 Unmatch
-                                        </button>
+                                <div className="match-meal-info neo-card">
+                                    <span className="meal-info-icon">🍱</span>
+                                    <div>
+                                        <p className="meal-info-label">Matching for</p>
+                                        <p className="meal-info-value">{match.mealTime?.charAt(0).toUpperCase() + match.mealTime?.slice(1)} · {match.mealDate}</p>
                                     </div>
                                 </div>
-                            </motion.div>
-                        );
-                    } else {
-                        // GROUP MATCH
-                        return (
-                            <motion.div
-                                key={match._id}
-                                initial={{ opacity: 0, y: 20 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                exit={{ opacity: 0, scale: 0.95 }}
-                                className="active-match-section"
-                            >
-                                <div className="section-label community-label">👥 Group Meal - {match.name}</div>
-                                <div className="neo-card community-active-card">
-                                    <div className="community-match-header">
-                                        <h3>{match.name} 🍱</h3>
-                                        <p className="community-meta">{match.mealTime} · {match.mealDate}</p>
-                                    </div>
-                                    
-                                    <div className="community-members-preview mt-3">
-                                        <p className="section-label-sm">Members ({match.members?.length})</p>
-                                        <div className="members-avatars-row">
-                                            {match.members?.map(m => (
-                                                <div key={m._id} className="member-avatar-wrap">
-                                                    <img src={getProfilePic(m.profilePic, m.name)} alt={m.name} title={m.name} />
-                                                    <span className="member-name-tag">{m.name.split(' ')[0]}</span>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
 
-                                    <div className="community-match-actions mt-4 flex" style={{ gap: '0.5rem' }}>
-                                        <button className="neo-btn neo-btn-primary flex-1" onClick={() => navigate('/community')}>
-                                            💬 Group Chat
-                                        </button>
-                                        {match.isCreator ? (
-                                            <button className="neo-btn neo-btn-outline" onClick={() => handleDissolve(match._id)}>
-                                                💥 Dissolve
-                                            </button>
-                                        ) : (
-                                            <button className="neo-btn neo-btn-outline" onClick={() => handleLeave(match._id)}>
-                                                🚪 Leave
-                                            </button>
-                                        )}
+                                {matchUser.bio && (
+                                    <div className="match-bio-card neo-card">
+                                        <p className="match-bio-text">"{matchUser.bio}"</p>
                                     </div>
+                                )}
+
+                                <div className="match-action-btns">
+                                    <button className="neo-btn neo-btn-secondary match-btn-success" onClick={() => handleComplete(match._id)}>
+                                        ✅ Meal Successful!
+                                    </button>
+                                    <button className="neo-btn neo-btn-outline match-btn-unmatch" onClick={() => handleUnmatch(match._id)}>
+                                        💔 Unmatch
+                                    </button>
                                 </div>
-                            </motion.div>
-                        );
-                    }
+                            </div>
+                        </motion.div>
+                    );
                 })}
             </AnimatePresence>
 

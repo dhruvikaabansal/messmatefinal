@@ -400,17 +400,14 @@ const ignoreLike = async (req, res) => {
   }
 };
 
-// ─── GET MATCHES ──────────────────────────────────────────────────────────────
-
 /**
  * GET /api/match/list
- * Returns all active/completed 1-1 matches AND communities the user belongs to.
+ * Returns all active/completed 1-1 matches for the user.
  */
 const getMatches = async (req, res) => {
   try {
     const currentUser = req.user;
 
-    // 1. Fetch 1-1 Matches
     const matches = await Match.find({
       users: currentUser._id,
     }).populate("users", "name birthday college bio interests profilePic prompts");
@@ -434,34 +431,12 @@ const getMatches = async (req, res) => {
       })
       .filter(Boolean);
 
-    // 2. Fetch Commmunity Matches
-    const communities = await Community.find({
-      members: currentUser._id,
-    })
-      .populate("members", "name profilePic birthday college")
-      .populate("createdBy", "name profilePic");
-
-    const groupMatches = communities.map((c) => ({
-      _id: c._id,
-      type: "group",
-      name: c.name,
-      description: c.description,
-      slotId: c.slotId,
-      mealTime: c.mealTime,
-      mealDate: c.mealDate,
-      status: "active", // Communities are currently only shown if active
-      members: c.members,
-      isCreator: c.createdBy?._id.toString() === currentUser._id.toString(),
-      createdBy: c.createdBy,
-      createdAt: c.createdAt,
-    }));
-
-    // [Combine sorted by date]
-    const allMatches = [...soloMatches, ...groupMatches].sort(
+    // Sort by date
+    const sorted = soloMatches.sort(
       (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
     );
 
-    return res.json({ matches: allMatches });
+    return res.json({ matches: sorted });
   } catch (error) {
     console.error("[matchController] getMatches:", error);
     res.status(500).json({ message: error.message });
