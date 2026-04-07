@@ -1,5 +1,5 @@
-const User = require("../models/User");
 const Preference = require("../models/Preference");
+const { calculateAge } = require("../utils/ageUtils");
 
 // GET USER PROFILE
 const getUserProfile = async (req, res) => {
@@ -13,7 +13,8 @@ const getUserProfile = async (req, res) => {
         name: user.name,
         email: user.email,
         college: user.college,
-        age: user.age,
+        birthday: user.birthday,
+        age: calculateAge(user.birthday),
         gender: user.gender,
         interests: user.interests,
         clubs: user.clubs,
@@ -50,20 +51,13 @@ const updateUserProfile = async (req, res) => {
     if (req.body.bio !== undefined) user.bio = req.body.bio;
     if (req.body.prompts !== undefined) user.prompts = req.body.prompts;
     
-    // Explicit Age handling with validation
-    if (req.body.age !== undefined) {
-      const numAge = Math.floor(Number(req.body.age)); // 🔥 Ensure integer
-      
-      // 🚨 AGE LOCK RULE: Cannot change age once set
-      if (user.age && user.age !== numAge) {
-        return res.status(400).json({ message: "Age cannot be changed once set. Contact support for corrections." });
+    // Birthday handling
+    if (req.body.birthday !== undefined) {
+      const bDay = new Date(req.body.birthday);
+      if (user.birthday && user.birthday.toISOString() !== bDay.toISOString()) {
+        return res.status(400).json({ message: "Birthday cannot be changed once set." });
       }
-
-      if (!isNaN(numAge) && numAge >= 16 && numAge <= 50) {
-        user.age = numAge;
-      } else {
-        return res.status(400).json({ message: "Age must be between 16 and 50" });
-      }
+      user.birthday = bDay;
     }
 
     if (req.body.isAvailable !== undefined) {
@@ -82,7 +76,8 @@ const updateUserProfile = async (req, res) => {
         name: updatedUser.name,
         email: updatedUser.email,
         college: updatedUser.college,
-        age: updatedUser.age,
+        birthday: updatedUser.birthday,
+        age: calculateAge(updatedUser.birthday),
         gender: updatedUser.gender,
         interests: updatedUser.interests,
         clubs: updatedUser.clubs,

@@ -14,7 +14,7 @@ const PREDEFINED_INTERESTS = [
 const Profile = () => {
     const [formData, setFormData] = useState({
         name: '', 
-        age: '',
+        birthday: '', // 🔥 Replaced age with birthday
         gender: 'male',
         bio: '',
         interests: [],
@@ -27,7 +27,7 @@ const Profile = () => {
     const [saving, setSaving] = useState(false);
     const [showSaved, setShowSaved] = useState(false);
     const [uploadingImage, setUploadingImage] = useState(false);
-    const [isAgeLocked, setIsAgeLocked] = useState(false);
+    const [isBirthdayLocked, setIsBirthdayLocked] = useState(false); // 🔥 Rename lock state
     const navigate = useNavigate();
     const location = useLocation();
     const isEditMode = new URLSearchParams(location.search).get('mode') === 'edit';
@@ -45,7 +45,7 @@ const Profile = () => {
 
                     setFormData({
                         name: data.name || '',
-                        age: data.age || '',
+                        birthday: data.birthday ? data.birthday.split('T')[0] : '', // Format for date input
                         gender: data.gender || 'male',
                         bio: data.bio || '',
                         interests: data.interests || [],
@@ -55,9 +55,9 @@ const Profile = () => {
                         prompts: data.prompts?.length > 0 ? data.prompts : [{ question: 'My favorite food is...', answer: '' }]
                     });
 
-                    // 🚨 Lock Age if it's already set in the backend (standardize: 0, null, undefined)
-                    if (data.age) {
-                        setIsAgeLocked(true);
+                    // 🚨 Lock Birthday if it's already set
+                    if (data.birthday) {
+                        setIsBirthdayLocked(true);
                     }
                 }
                 setLoading(false);
@@ -100,15 +100,22 @@ const Profile = () => {
         }
     };
 
-    const isProfileFilled = () => formData.age && formData.college && formData.interests.length > 0 && formData.profilePic;
+    const isProfileFilled = () => formData.birthday && formData.college && formData.interests.length > 0 && formData.profilePic;
 
     const saveProfileData = async () => {
         const finalCollege = formData.college === 'Other' ? formData.otherCollege : formData.college;
         
         // 1. Client-side validation
-        const numAge = Math.floor(Number(formData.age));
-        if (!formData.age || isNaN(numAge) || numAge < 16 || numAge > 50) {
-            alert('Please enter a valid age between 16 and 50.');
+        if (!formData.birthday) {
+            alert('Please select your birthday.');
+            return false;
+        }
+
+        // Validate birthday (min 16 yrs)
+        const birthDate = new Date(formData.birthday);
+        const age = new Date().getFullYear() - birthDate.getFullYear();
+        if (age < 16 || age > 60) {
+            alert('Wait! You must be at least 16 to use MessMate.');
             return false;
         }
 
@@ -127,7 +134,7 @@ const Profile = () => {
             const res = await api.put('/user/profile', { 
                 ...formData, 
                 college: finalCollege,
-                age: numAge
+                birthday: formData.birthday
             });
             
             // Sync local state with server response (important for formatting/ID consistency)
@@ -135,10 +142,10 @@ const Profile = () => {
             if (updatedProfile) {
                 setFormData(prev => ({
                     ...prev,
-                    age: updatedProfile.age,
+                    birthday: updatedProfile.birthday ? updatedProfile.birthday.split('T')[0] : prev.birthday,
                     college: updatedProfile.college // Keep raw but state logic handles matching
                 }));
-                if (updatedProfile.age) setIsAgeLocked(true);
+                if (updatedProfile.birthday) setIsBirthdayLocked(true);
             }
 
             setShowSaved(true);
@@ -240,21 +247,19 @@ const Profile = () => {
                     </div>
 
                     <div className="form-group">
-                            <label>Age</label>
+                            <label>Birthday {formData.birthday && `(Age: ${new Date().getFullYear() - new Date(formData.birthday).getFullYear()})`}</label>
                             <input
                                 className="neo-input"
-                                type="number"
-                                value={formData.age}
-                                onChange={(e) => setFormData({...formData, age: e.target.value})}
+                                type="date"
+                                value={formData.birthday}
+                                onChange={(e) => setFormData({...formData, birthday: e.target.value})}
                                 required
-                                min="16"
-                                max="50"
-                                disabled={isAgeLocked}
-                                style={isAgeLocked ? { backgroundColor: 'var(--bg)', cursor: 'not-allowed', opacity: 0.7 } : {}}
+                                disabled={isBirthdayLocked}
+                                style={isBirthdayLocked ? { backgroundColor: 'var(--bg)', cursor: 'not-allowed', opacity: 0.7 } : {}}
                             />
-                            {isAgeLocked && (
+                            {isBirthdayLocked && (
                                 <small className="hint-text" style={{marginTop: '0.5rem', color: 'var(--text-dim)', fontStyle: 'italic', display: 'block'}}>
-                                    🔒 Age cannot be changed once set.
+                                    🔒 Your birthday is locked. Contact support to change it.
                                 </small>
                             )}
                         </div>

@@ -140,6 +140,13 @@ const createCommunity = async (req, res) => {
 
     // 3. Check state — only idle/liked can create
     const myState = await getOrCreateState(userId, slotId);
+    const pref = await Preference.findOne({ user: userId });
+
+    if (!pref || pref.groupSize < 3) {
+      return res.status(400).json({ 
+        message: "You must set your Ideal Group Size to 3 or 4 in Preferences to create a group meal. 🍱" 
+      });
+    }
 
     if (myState.state === "matched") {
       return res.status(400).json({
@@ -216,6 +223,13 @@ const joinCommunity = async (req, res) => {
 
     // 3. Check state — only idle/liked can join
     const myState = await getOrCreateState(userId, slotId);
+    const pref = await Preference.findOne({ user: userId });
+
+    if (!pref || pref.groupSize < 3) {
+      return res.status(400).json({ 
+        message: "You must set your Ideal Group Size to 3 or 4 in Preferences to join a group meal. 🍱" 
+      });
+    }
 
     if (myState.state === "matched") {
       return res.status(400).json({

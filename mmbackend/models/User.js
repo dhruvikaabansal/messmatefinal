@@ -34,10 +34,9 @@ const userSchema = new mongoose.Schema(
       index: true, // 🔥 faster matching queries
     },
 
-    age: {
-      type: Number,
-      min: 16,
-      max: 50,
+    birthday: {
+      type: Date,
+      // Required during profile completion (Step 1), but optional during registration
     },
 
     gender: {
@@ -103,11 +102,23 @@ const userSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-  },
-
-  
-
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true }
+  }
 );
+
+// Virtual for age calculation
+userSchema.virtual("age").get(function () {
+  if (!this.birthday) return 20;
+  const today = new Date();
+  const birthDate = new Date(this.birthday);
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const m = today.getMonth() - birthDate.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+    age--;
+  }
+  return age;
+});
 
 const User = mongoose.model("User", userSchema);
 

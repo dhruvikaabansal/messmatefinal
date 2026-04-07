@@ -87,7 +87,7 @@ const getCandidates = async (req, res) => {
       // Return match details so UI can show the locked screen
       const match = await Match.findById(myState.matchId).populate(
         "users",
-        "name age profilePic college"
+        "name birthday profilePic college"
       );
       const partner = match?.users.find(
         (u) => u._id.toString() !== currentUser._id.toString()
@@ -125,6 +125,16 @@ const getCandidates = async (req, res) => {
 
     const candidateIds = candidateStates.map((s) => s.userId);
 
+    // 🔥 NEW: Filter out users who are NOT in Solo Mode (groupSize < 3)
+    let eligibleSoloIds = [];
+    if (candidateIds.length > 0) {
+      const candidatePrefs = await Preference.find({
+        user: { $in: candidateIds },
+        groupSize: { $lt: 3 },
+      });
+      eligibleSoloIds = candidatePrefs.map((p) => p.user);
+    }
+
     // 5. Remove already-interacted users
     const prevInteractions = await Like.find({
       fromUser: currentUser._id,
@@ -139,10 +149,10 @@ const getCandidates = async (req, res) => {
         : {};
 
     const users = await User.find({
-      _id: { $in: candidateIds, $nin: [...interactedSet] },
+      _id: { $in: eligibleSoloIds, $nin: [...interactedSet] },
       college: currentUser.college,
       ...genderFilter,
-    }).select("name age gender college bio interests profilePic prompts");
+    }).select("name birthday gender college bio interests profilePic prompts");
 
     // 7. Rank by interest + age similarity
     const ranked = users
@@ -345,7 +355,7 @@ const getLikesReceived = async (req, res) => {
       toUser: currentUser._id,
       slotId,
       status: "pending",
-    }).populate("fromUser", "name age college bio interests profilePic");
+    }).populate("fromUser", "name birthday college bio interests profilePic");
 
     const usersWhoLiked = likes.map((l) => ({
       _id: l.fromUser._id,
@@ -395,7 +405,7 @@ const getMatches = async (req, res) => {
     const matches = await Match.find({
       users: currentUser._id,
       status: "active",
-    }).populate("users", "name age college bio interests profilePic prompts");
+    }).populate("users", "name birthday college bio interests profilePic prompts");
 
     const clean = matches
       .map((match) => {

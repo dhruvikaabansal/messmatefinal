@@ -13,6 +13,7 @@ import LikesReceived from './pages/LikesReceived';
 import Home from './pages/Home';
 import Community from './pages/Community';
 import Navbar from './components/Navbar';
+import BottomNav from './components/BottomNav'; // 🔥 NEW
 import ProfilePreview from './pages/ProfilePreview';
 
 // Protect routes that require authentication
@@ -45,7 +46,10 @@ const LayoutWrapper = ({ children }) => {
   return (
     <>
       {showNavbar && <Navbar />}
-      {children}
+      <div className="main-content-wrapper">
+        {children}
+      </div>
+      {showNavbar && <BottomNav />}
     </>
   );
 };

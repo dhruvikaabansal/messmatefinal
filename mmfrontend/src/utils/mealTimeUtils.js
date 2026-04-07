@@ -16,26 +16,42 @@ export const getLocalDateStr = (date = new Date()) => {
  * @param {string} mealDate - 'YYYY-MM-DD'
  * @returns {boolean} - true if the meal time has passed
  */
-export const isMealTimePassed = (mealTime, mealDate) => {
+/**
+ * Get current time in IST (UTC+5:30)
+ * @returns {{ dateStr: string, hour: number }}
+ */
+export const getISTNow = () => {
     const now = new Date();
-    const todayStr = getLocalDateStr(now); // ✅ Local date, not UTC
+    // Convert to IST by adding 5 hours 30 minutes to UTC
+    const IST_OFFSET_MS = (5 * 60 + 30) * 60 * 1000;
+    const istMs = now.getTime() + now.getTimezoneOffset() * 60 * 1000 + IST_OFFSET_MS;
+    const istDate = new Date(istMs);
+    const year = istDate.getUTCFullYear();
+    const month = String(istDate.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(istDate.getUTCDate()).padStart(2, '0');
+    return {
+        dateStr: `${year}-${month}-${day}`,
+        hour: istDate.getUTCHours(),
+    };
+};
 
-    // If the date is in the future, the meal has not passed
-    if (mealDate > todayStr) return false;
-    // If the date is in the past, all meals have passed
-    if (mealDate < todayStr) return true;
+/**
+ * Utility to check if a meal time has passed for a specific date.
+ */
+export const isMealTimePassed = (mealTime, mealDate) => {
+    const { dateStr: todayIST, hour: currentHourIST } = getISTNow();
 
-    // Cut-off hours (24-hour format)
+    if (mealDate > todayIST) return false;
+    if (mealDate < todayIST) return true;
+
     const cutOffs = {
-        breakfast: 10, // 10:00 AM
-        lunch: 15,     // 3:00 PM
-        snacks: 18,    // 6:00 PM
-        dinner: 22     // 10:00 PM
+        breakfast: 10,
+        lunch: 15,
+        snacks: 18,
+        dinner: 22
     };
 
-    const currentHour = now.getHours(); // ✅ Local hour (IST)
-    
-    return currentHour >= cutOffs[mealTime];
+    return currentHourIST >= cutOffs[mealTime];
 };
 
 /**

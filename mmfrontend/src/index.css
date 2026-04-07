@@ -138,3 +138,53 @@ h1, h2, h3, h4 {
     transform: translate(-2px, -2px);
     box-shadow: 6px 6px 0px #000;
 }
+
+/* 🔥 MOBILE RESPONSIVENESS */
+.main-content-wrapper {
+    min-height: 100vh;
+    padding-bottom: 0;
+    transition: padding 0.3s ease;
+}
+
+@media (max-width: 768px) {
+    .container {
+        padding: 1rem;
+        padding-bottom: 90px; /* Space for BottomNav */
+    }
+
+    .onboarding-steps {
+        gap: 0.5rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .onboarding-steps .step {
+        font-size: 0.75rem;
+        padding: 0.4rem 0.6rem;
+    }
+
+    /* Hide desktop navbar on mobile */
+    .navbar {
+        display: none !important;
+    }
+
+    .main-content-wrapper {
+        padding-bottom: 70px; /* Width of BottomNav */
+    }
+
+    h1 { font-size: 1.5rem; }
+    h2 { font-size: 1.25rem; }
+
+    .neo-card {
+        padding: 1rem;
+        box-shadow: 4px 4px 0px #000000;
+    }
+
+    .neo-card:hover {
+        transform: none;
+        box-shadow: 4px 4px 0px #000000;
+    }
+
+    .neo-shadow {
+        box-shadow: 4px 4px 0px #000000;
+    }
+}

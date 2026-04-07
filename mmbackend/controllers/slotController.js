@@ -51,19 +51,12 @@ const getSlotStatus = async (req, res) => {
     const slotStatus = isSlotActive(slotId) ? "active" : "closed";
 
     // ── 3. Get or create the user's state for this slot ──────────────────────
-    let slotState = await UserSlotState.findOne({
-      userId: currentUser._id,
-      slotId,
-    });
-
-    if (!slotState) {
-      // Lazily create an idle state for new slots
-      slotState = await UserSlotState.create({
-        userId: currentUser._id,
-        slotId,
-        state: "idle",
-      });
-    }
+    // Use findOneAndUpdate with upsert to avoid E11000 race conditions
+    const slotState = await UserSlotState.findOneAndUpdate(
+      { userId: currentUser._id, slotId },
+      { $setOnInsert: { userId: currentUser._id, slotId, state: "idle" } },
+      { upsert: true, new: true }
+    );
 
     const state = slotState.state;
 
@@ -78,7 +71,7 @@ const getSlotStatus = async (req, res) => {
       if (slotState.matchId) {
         const match = await Match.findById(slotState.matchId).populate(
           "users",
-          "name age college bio interests profilePic prompts"
+          "name birthday college bio interests profilePic prompts"
         );
         if (match) {
           const partner = match.users.find(
@@ -145,7 +138,7 @@ const getSlotStatus = async (req, res) => {
             _id: { $in: eligibleUserIds, $nin: [...interactedIds] },
             college: currentUser.college,
             ...genderFilter,
-          }).select("name age gender college bio interests profilePic prompts");
+          }).select("name birthday gender college bio interests profilePic prompts");
 
           // Rank by interest similarity
           availableUsers = eligibleUsers
@@ -170,7 +163,7 @@ const getSlotStatus = async (req, res) => {
           toUser: currentUser._id,
           slotId,
           status: "pending",
-        }).populate("fromUser", "name age college bio interests profilePic");
+        }).populate("fromUser", "name birthday college bio interests profilePic");
 
         likesReceived = rawLikes.map((l) => ({
           likeId: l._id,
