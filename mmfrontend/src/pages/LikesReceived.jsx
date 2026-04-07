@@ -17,7 +17,7 @@ const LikesReceived = () => {
 
     const fetchLikes = async () => {
         try {
-            const res = await api.get('/match/likes-received');
+            const res = await api.get(`/match/likes-received?t=${Date.now()}`);
             if (res.data.isLocked) {
                 setIsLocked(true);
                 setLockType(res.data.lockType || 'match');

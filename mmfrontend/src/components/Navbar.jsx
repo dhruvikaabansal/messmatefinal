@@ -50,9 +50,9 @@ const Navbar = () => {
         </div>
         
         {logoIsClickable ? (
-          <Link to="/home" className="neo-brand">MessMate 🍽️</Link>
+          <Link to="/home" className="neo-brand">MessMate 🍽️ <span style={{ fontSize: '8px', opacity: 0.3 }}>v1.5.final_sync</span></Link>
         ) : (
-          <span className="neo-brand disabled" title="Complete your profile to unlock navigation">MessMate 🍽️</span>
+          <span className="neo-brand disabled" title="Complete your profile to unlock navigation">MessMate 🍽️ <span style={{ fontSize: '8px', opacity: 0.3 }}>v1.5.final_sync</span></span>
         )}
 
         <div className="neo-navbar-right flex mobile-hide-flex">
