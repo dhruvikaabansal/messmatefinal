@@ -357,16 +357,24 @@ const getLikesReceived = async (req, res) => {
       status: "pending",
     }).populate("fromUser", "name birthday college bio interests profilePic");
 
-    const usersWhoLiked = likes.map((l) => ({
-      _id: l.fromUser._id,
-      name: l.fromUser.name,
-      age: l.fromUser.age,
-      college: l.fromUser.college,
-      bio: l.fromUser.bio,
-      interests: l.fromUser.interests,
-      profilePic: l.fromUser.profilePic,
-      likeId: l._id,
-    }));
+    const usersWhoLiked = likes
+      .map((l) => {
+        if (!l.fromUser) return null;
+        // Access age virtual explicitly to ensure it pops up in the plain object
+        const age = l.fromUser.age; 
+        return {
+          _id: l.fromUser._id,
+          name: l.fromUser.name,
+          age: age,
+          birthday: l.fromUser.birthday,
+          college: l.fromUser.college,
+          bio: l.fromUser.bio,
+          interests: l.fromUser.interests,
+          profilePic: l.fromUser.profilePic,
+          likeId: l._id,
+        };
+      })
+      .filter(Boolean);
 
     return res.json({ likes: usersWhoLiked });
   } catch (error) {
@@ -396,18 +404,18 @@ const ignoreLike = async (req, res) => {
 
 /**
  * GET /api/match/list
- * Returns all active matches for the current user (across all slots).
+ * Returns all active/completed 1-1 matches AND communities the user belongs to.
  */
 const getMatches = async (req, res) => {
   try {
     const currentUser = req.user;
 
+    // 1. Fetch 1-1 Matches
     const matches = await Match.find({
       users: currentUser._id,
-      status: "active",
     }).populate("users", "name birthday college bio interests profilePic prompts");
 
-    const clean = matches
+    const soloMatches = matches
       .map((match) => {
         const partner = match.users.find(
           (u) => u._id.toString() !== currentUser._id.toString()
@@ -415,6 +423,7 @@ const getMatches = async (req, res) => {
         if (!partner) return null;
         return {
           _id: match._id,
+          type: "solo",
           slotId: match.slotId,
           mealTime: match.mealTime,
           mealDate: match.mealDate,
@@ -425,7 +434,34 @@ const getMatches = async (req, res) => {
       })
       .filter(Boolean);
 
-    return res.json({ matches: clean });
+    // 2. Fetch Commmunity Matches
+    const communities = await Community.find({
+      members: currentUser._id,
+    })
+      .populate("members", "name profilePic birthday college")
+      .populate("createdBy", "name profilePic");
+
+    const groupMatches = communities.map((c) => ({
+      _id: c._id,
+      type: "group",
+      name: c.name,
+      description: c.description,
+      slotId: c.slotId,
+      mealTime: c.mealTime,
+      mealDate: c.mealDate,
+      status: "active", // Communities are currently only shown if active
+      members: c.members,
+      isCreator: c.createdBy?._id.toString() === currentUser._id.toString(),
+      createdBy: c.createdBy,
+      createdAt: c.createdAt,
+    }));
+
+    // [Combine sorted by date]
+    const allMatches = [...soloMatches, ...groupMatches].sort(
+      (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+    );
+
+    return res.json({ matches: allMatches });
   } catch (error) {
     console.error("[matchController] getMatches:", error);
     res.status(500).json({ message: error.message });

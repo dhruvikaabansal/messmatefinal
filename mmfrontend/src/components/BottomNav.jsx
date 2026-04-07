@@ -25,7 +25,7 @@ const BottomNav = () => {
             </NavLink>
             <NavLink to="/matches" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
                 <span className="nav-icon">💬</span>
-                <span className="nav-label">Chats</span>
+                <span className="nav-label">Matches</span>
             </NavLink>
             <NavLink to="/home" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
                 <span className="nav-icon">👤</span>

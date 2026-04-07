@@ -63,8 +63,9 @@ const LikesReceived = () => {
     }
 
     return (
-        <div className="container">
-            <h1>People who liked you ❤️</h1>
+        <div className="container likes-received-page">
+            <h1 className="page-title">Interested MessMates ❤️</h1>
+            <p className="page-subtitle">These people want to grab a meal with you in your current slot.</p>
             
             {likes.length === 0 ? (
                 <div className="neo-card empty-state">
