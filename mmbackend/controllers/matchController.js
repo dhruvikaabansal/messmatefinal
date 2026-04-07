@@ -355,7 +355,9 @@ const getLikesReceived = async (req, res) => {
     }
 
     // 🆕 LOCK IF IN GROUP MODE: If user's current preference is for 3-4 members, block 1-1 matching.
-    if (pref && pref.groupSize >= 3) {
+    // Query directly to be 100% fresh
+    const activePref = await Preference.findOne({ user: currentUser._id });
+    if (activePref && Number(activePref.groupSize) >= 3) {
       return res.json({ 
         likes: [], 
         isLocked: true, 
