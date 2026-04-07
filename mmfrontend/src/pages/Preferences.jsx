@@ -94,7 +94,7 @@ const Preferences = () => {
         }
     };
 
-    // Auto-fix if current selection is passed
+    // Auto-fix if current selection is passed (e.g. user selected Lunch, but time is now 4 PM)
     useEffect(() => {
         if (isMealTimePassed(formData.mealTime, formData.mealDate)) {
             const nextAvailable = MEAL_ORDER.find(m => !isMealTimePassed(m, formData.mealDate));
@@ -102,7 +102,7 @@ const Preferences = () => {
                 setFormData(prev => ({ ...prev, mealTime: nextAvailable }));
             }
         }
-    }, [formData.mealDate]);
+    }, [formData.mealDate, formData.mealTime]); // ✅ Include mealTime so it runs on initial load too
 
     const handleSubmit = async (e) => {
         e.preventDefault();

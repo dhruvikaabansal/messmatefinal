@@ -31,6 +31,11 @@ const BottomNav = () => {
                 <span className="nav-icon">👤</span>
                 <span className="nav-label">Me</span>
             </NavLink>
+
+            {/* 🛡️ DEPLOYMENT HEARTBEAT: Verifies sync */}
+            <span style={{ position: 'absolute', bottom: '2px', right: '5px', fontSize: '8px', opacity: 0.2, pointerEvents: 'none', color: '#000' }}>
+                v1.2.sync
+            </span>
         </nav>
     );
 };
