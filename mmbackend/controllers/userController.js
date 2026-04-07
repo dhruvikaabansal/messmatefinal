@@ -1,3 +1,4 @@
+const User = require("../models/User");
 const Preference = require("../models/Preference");
 const { calculateAge } = require("../utils/ageUtils");
 
