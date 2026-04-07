@@ -284,9 +284,6 @@ const Community = () => {
             <div className="community-header-premium">
                 <div className="header-main-info">
                     <h1>Community Tables 👥</h1>
-                    <p className="header-subtitle">
-                        Currently: <strong>{slotData?.mealTime || '...'}</strong> · {slotData?.mealDate === todayStr ? 'Today' : (slotData?.mealDate || '...')}
-                    </p>
                     <div className="community-context-bar">
                         <button className="neo-btn change-slot-btn-minimal" onClick={() => navigate('/preferences?mode=edit')}>
                              ⚙️ Change
