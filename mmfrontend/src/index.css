@@ -148,8 +148,8 @@ h1, h2, h3, h4 {
 
 @media (max-width: 768px) {
     .container {
-        padding: 1rem;
-        padding-bottom: 90px; /* Space for BottomNav */
+        padding: 1.25rem;
+        padding-bottom: 100px; /* Space for BottomNav */
     }
 
     .onboarding-steps {
@@ -168,14 +168,15 @@ h1, h2, h3, h4 {
     }
 
     .main-content-wrapper {
-        padding-bottom: 70px; /* Width of BottomNav */
+        padding-bottom: 70px; /* Height of BottomNav */
     }
 
-    h1 { font-size: 1.5rem; }
-    h2 { font-size: 1.25rem; }
+    h1 { font-size: 1.75rem; }
+    h2 { font-size: 1.4rem; }
+    h3 { font-size: 1.15rem; }
 
     .neo-card {
-        padding: 1rem;
+        padding: 1.25rem;
         box-shadow: 4px 4px 0px #000000;
     }
 
@@ -186,5 +187,24 @@ h1, h2, h3, h4 {
 
     .neo-shadow {
         box-shadow: 4px 4px 0px #000000;
+    }
+
+    .neo-btn {
+        width: 100%;
+        padding: 1rem;
+        font-size: 0.9rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .container {
+        padding: 1rem;
+        padding-bottom: 90px;
+    }
+    
+    h1 { font-size: 1.5rem; }
+    
+    .grid {
+        gap: 1.25rem;
     }
 }

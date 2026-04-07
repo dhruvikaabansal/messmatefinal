@@ -53,3 +53,37 @@
 .mt-2 {
     margin-top: 2rem;
 }
+
+/* 🔥 MOBILE RESPONSIVENESS */
+@media (max-width: 768px) {
+    .home-dashboard {
+        padding-top: 1rem;
+        text-align: center;
+    }
+
+    .welcome-card h1 {
+        font-size: 1.75rem;
+    }
+
+    .welcome-card p {
+        font-size: 0.9rem;
+    }
+
+    .home-grid {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+
+    .home-option {
+        padding: 1rem;
+    }
+
+    .home-option h3 {
+        font-size: 1.1rem;
+    }
+
+    .badge {
+        font-size: 0.7rem;
+        padding: 0.25rem 0.5rem;
+    }
+}

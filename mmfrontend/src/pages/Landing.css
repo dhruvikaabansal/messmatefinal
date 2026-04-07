@@ -250,3 +250,80 @@
     font-weight: 600;
     color: #555;
 }
+
+/* 🔥 MOBILE RESPONSIVENESS */
+@media (max-width: 768px) {
+    .landing-nav {
+        padding: 1rem 1.5rem;
+    }
+
+    .landing-logo {
+        font-size: 1.5rem;
+    }
+
+    .landing-nav-btns {
+        gap: 0.5rem;
+    }
+
+    .landing-hero {
+        padding: 3rem 1.25rem 3rem;
+    }
+
+    .hero-headline {
+        font-size: 2.8rem;
+        letter-spacing: -1.5px;
+        margin-bottom: 1rem;
+    }
+
+    .hero-subtext {
+        font-size: 1rem;
+        margin-bottom: 2rem;
+    }
+
+    .landing-btn-primary.large {
+        width: 100%;
+        padding: 0.8rem 1.5rem;
+        font-size: 1rem;
+    }
+
+    .landing-features {
+        grid-template-columns: 1fr;
+        padding: 0 1.25rem 3rem;
+    }
+
+    .feature-card {
+        padding: 1.5rem;
+    }
+
+    .cta-banner {
+        margin: 0 1.25rem 3rem;
+        padding: 2.5rem 1.5rem;
+    }
+
+    .cta-banner h2 {
+        font-size: 1.8rem;
+    }
+
+    .hero-ctas {
+        width: 100%;
+    }
+
+    .stats-row {
+        gap: 0.5rem;
+    }
+
+    .stat-chip {
+        font-size: 0.75rem;
+        padding: 0.35rem 0.8rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .hero-headline {
+        font-size: 2.4rem;
+    }
+
+    .landing-logo {
+        font-size: 1.25rem;
+    }
+}

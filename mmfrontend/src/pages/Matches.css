@@ -315,3 +315,62 @@
     color: #c0115a;
     border-color: #c0115a;
 }
+
+/* 🔥 MOBILE RESPONSIVENESS */
+@media (max-width: 768px) {
+    .matches-page {
+        padding-top: 1rem;
+        padding-bottom: 100px;
+    }
+
+    .matches-header h1 {
+        font-size: 1.5rem;
+    }
+
+    .match-hero-img {
+        height: 300px;
+    }
+
+    .match-hero-overlay h2 {
+        font-size: 1.4rem;
+    }
+
+    .match-hero-overlay {
+        padding: 1rem;
+    }
+
+    .active-match-section {
+        margin-bottom: 2rem;
+    }
+
+    .section-label {
+        font-size: 0.7rem;
+        margin-bottom: 0.75rem;
+    }
+
+    .past-match-card {
+        padding: 0.75rem 1rem;
+    }
+
+    .past-match-img {
+        width: 48px;
+        height: 48px;
+    }
+
+    .past-match-info h3 {
+        font-size: 0.9rem;
+    }
+
+    .past-college {
+        font-size: 0.7rem;
+    }
+
+    .match-action-btns {
+        gap: 0.5rem;
+    }
+
+    .match-btn-success, .match-btn-unmatch {
+        font-size: 0.9rem;
+        padding: 0.8rem;
+    }
+}

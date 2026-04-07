@@ -131,3 +131,28 @@
   color: var(--secondary-pink);
   text-align: center;
 }
+
+/* 🔥 MOBILE RESPONSIVENESS */
+@media (max-width: 600px) {
+  .settings-container {
+    padding: 20px 15px;
+    padding-bottom: 100px;
+  }
+
+  .settings-card {
+    padding: 24px 18px;
+  }
+
+  .settings-title {
+    font-size: 1.4rem;
+  }
+
+  .pill-group {
+    gap: 8px;
+  }
+
+  .pill-btn {
+    padding: 8px 14px;
+    font-size: 0.85rem;
+  }
+}
