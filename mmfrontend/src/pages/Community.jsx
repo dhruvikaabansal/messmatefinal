@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import { isMealTimePassed, MEAL_ORDER, getFirstAvailableMeal, getLocalDateStr } from '../utils/mealTimeUtils';
+import { getProfilePic } from '../utils/imgUtils';
 import './Community.css';
 import './Profile.css';
 
@@ -258,8 +259,24 @@ const Community = () => {
                             ))}
                         </div>
                     )}
-                    <div className="members-count">
+                    <div className="members-count" style={{ marginBottom: '1rem' }}>
                         👥 {activeCommunity.members?.length} / {activeCommunity.maxMembers || 4} members
+                    </div>
+                    
+                    <div className="community-members-list" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1.5rem' }}>
+                        {activeCommunity.members?.map((member, idx) => (
+                            <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', background: '#f5f5f5', padding: '0.6rem 1rem', borderRadius: '12px', border: '2px solid #000' }}>
+                                <img 
+                                    src={getProfilePic(member.profilePic, member.name)} 
+                                    alt={member.name} 
+                                    style={{ width: '40px', height: '40px', borderRadius: '50%', border: '2px solid #000', objectFit: 'cover' }} 
+                                />
+                                <div>
+                                    <div style={{ fontWeight: '800', fontSize: '1rem' }}>{member.name}{member.age ? `, ${member.age}` : ''}</div>
+                                    {activeCommunity.createdBy?._id === member._id && <div style={{ fontSize: '0.7rem', color: '#ff6b6b', fontWeight: 'bold', textTransform: 'uppercase', marginTop: '2px' }}>Organizer</div>}
+                                </div>
+                            </div>
+                        ))}
                     </div>
                     <div className="created-by">Organizer: {activeCommunity.createdBy?.name || 'Anonymous'}</div>
                     <div className="community-actions mt-2">
@@ -323,9 +340,20 @@ const Community = () => {
                                     ))}
                                 </div>
                             )}
-                            <div className="members-count">
+                            <div className="members-count" style={{ marginBottom: '0.5rem' }}>
                                 👥 {c.members.length} / {c.maxMembers || 4} members
                                 {c.members.length >= (c.maxMembers || 4) && <span className="full-label"> (FULL)</span>}
+                            </div>
+                            <div className="community-members-avatars" style={{ display: 'flex', gap: '0.4rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+                                {c.members.map((member, idx) => (
+                                     <img 
+                                         key={idx} 
+                                         src={getProfilePic(member.profilePic, member.name)} 
+                                         title={member.name} 
+                                         alt={member.name} 
+                                         style={{ width: '32px', height: '32px', borderRadius: '50%', border: '2px solid #000', objectFit: 'cover' }} 
+                                     />
+                                ))}
                             </div>
                             <div className="created-by">Organizer: {c.createdBy?.name || 'Anonymous'}</div>
                             <div className="community-actions mt-2">

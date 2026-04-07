@@ -82,7 +82,7 @@ const LikesReceived = () => {
         <div className="container likes-received-page">
             <div className="community-header-premium" style={{ marginBottom: '2rem' }}>
                 <div className="header-main-info">
-                    <h1>LikesReceived ❤️</h1>
+                    <h1>Likes Received ❤️</h1>
                     <div className="community-context-bar">
                         <span className="slot-context-pill" style={{ background: 'var(--accent)', padding: '0.4rem 0.8rem', border: '3px solid #000', fontWeight: '800', marginRight: '0.5rem' }}>
                             <span className="capitalize">{slotInfo.mealTime}</span> · {slotInfo.mealDate}
