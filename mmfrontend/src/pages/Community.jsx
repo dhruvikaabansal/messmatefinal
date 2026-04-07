@@ -284,12 +284,12 @@ const Community = () => {
             <div className="community-header-premium">
                 <div className="header-main-info">
                     <h1>Community Tables 👥</h1>
+                    <p className="header-subtitle">
+                        Currently: <strong>{slotData?.mealTime || '...'}</strong> · {slotData?.mealDate === todayStr ? 'Today' : (slotData?.mealDate || '...')}
+                    </p>
                     <div className="community-context-bar">
-                        <button className="neo-btn community-slot-trigger" onClick={() => navigate('/preferences?mode=edit')}>
-                             <span className="pill-text">
-                                🍱 <strong className="capitalize">{slotData?.mealTime || '...'}</strong> · {slotData?.mealDate === todayStr ? 'Today' : (slotData?.mealDate || '...')}
-                             </span>
-                             <span className="trigger-label">⚙️ Change</span>
+                        <button className="neo-btn change-slot-btn-minimal" onClick={() => navigate('/preferences?mode=edit')}>
+                             ⚙️ Change
                         </button>
                     </div>
                 </div>
