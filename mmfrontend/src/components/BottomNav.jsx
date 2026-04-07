@@ -34,7 +34,7 @@ const BottomNav = () => {
 
             {/* 🛡️ DEPLOYMENT HEARTBEAT: Verifies sync */}
             <span style={{ position: 'absolute', bottom: '2px', right: '5px', fontSize: '8px', opacity: 0.2, pointerEvents: 'none', color: '#000' }}>
-                v1.6.members_sync
+                v1.7.discover_fix
             </span>
         </nav>
     );

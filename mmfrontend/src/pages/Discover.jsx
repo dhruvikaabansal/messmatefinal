@@ -229,7 +229,7 @@ const Discover = () => {
                     <h1>Discover 👋</h1>
                     <div className="community-context-bar">
                         <span className="slot-context-pill" style={{ background: 'var(--accent)', padding: '0.4rem 0.8rem', border: '3px solid #000', fontWeight: '800', marginRight: '0.5rem' }}>
-                            {slotData.mealTime} · {slotData.mealDate === todayStr ? 'Today' : slotData.mealDate}
+                            <span className="capitalize">{slotData.mealTime}</span> · {slotData.mealDate}
                         </span>
                         <button className="neo-btn change-slot-btn-minimal" onClick={() => navigate('/preferences?mode=edit')} style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}>
                              ⚙️ Change
