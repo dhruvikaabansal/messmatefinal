@@ -139,9 +139,20 @@ const Community = () => {
     const handleCreate = async (e) => {
         e.preventDefault();
         try {
-            await api.post('/community/create', newCommunity);
+            const res = await api.post('/community/create', newCommunity);
+            
+            // 🔥 CRITICAL: Automatically sync user preference to the newly created slot!
+            // This ensures they "land" on the correct community and see it immediately.
+            await api.post('/preferences', {
+                mealTime: newCommunity.mealTime,
+                mealDate: newCommunity.mealDate,
+                groupSize: 3 // ensure they stay in group mode
+            });
+
             setShowCreateModal(false);
             setNewCommunity({ name: '', mealTime: 'lunch', mealDate: todayStr, description: '', interests: [], maxMembers: 4 });
+            
+            // Refresh state
             fetchAll();
         } catch (err) {
             alert(err.response?.data?.message || 'Error creating community');
@@ -269,17 +280,28 @@ const Community = () => {
 
     // ── STATE: IDLE / LIKED — Browse & Create ─────────────────────────────────
     return (
-        <div className="container">
+        <div className="container community-page pb-5">
+            {/* 🚥 SLOT SELECTOR INDICATION */}
+            <div className="slot-indicator-banner neo-card">
+                <div className="slot-info-pill">
+                    <span className="pulse-icon">📍</span>
+                    <span>Viewing: <strong>{slotData?.mealDate === todayStr ? 'Today' : slotData?.mealDate}</strong> · <strong className="capitalize">{slotData?.mealTime}</strong></span>
+                </div>
+                <button className="neo-btn neo-btn-sm" onClick={() => navigate('/preferences?mode=edit')}>
+                    Change Slot ⚙️
+                </button>
+            </div>
+
             <div className="community-header">
                 <div className="header-info">
-                    <h1>Community Meals 👥</h1>
-                    <p className="header-subtitle">Join or create a group table for your next meal.</p>
+                    <h1>Community Tables 👥</h1>
+                    <p className="header-subtitle">Parties of 3 or 4 are matched here!</p>
                 </div>
                 <button
-                    className="neo-btn neo-btn-secondary"
+                    className="neo-btn neo-btn-secondary create-group-float"
                     onClick={() => setShowCreateModal(true)}
                 >
-                    + Create Group
+                    + Create Table
                 </button>
             </div>
 
@@ -339,54 +361,81 @@ const Community = () => {
 
             {showCreateModal && (
                 <div className="modal-overlay">
-                    <div className="neo-card modal-content">
-                        <h2>Start a Meal Group</h2>
-                        <form onSubmit={handleCreate}>
+                    <div className="neo-card modal-content premium-modal">
+                        <div className="modal-header">
+                            <h2>Start a Group Table 🍱</h2>
+                            <button className="close-modal-btn" onClick={() => setShowCreateModal(false)}>✕</button>
+                        </div>
+                        
+                        <form onSubmit={handleCreate} className="premium-form">
                             <div className="form-group">
-                                <label>Group Name</label>
-                                <input className="neo-input" value={newCommunity.name} onChange={(e) => setNewCommunity({ ...newCommunity, name: e.target.value })} required />
+                                <label className="neo-label">What's the vibe? (Group Name)</label>
+                                <input 
+                                    className="neo-input" 
+                                    placeholder="e.g. Pizza & Politics, Gym Rats Lunch..." 
+                                    value={newCommunity.name} 
+                                    onChange={(e) => setNewCommunity({ ...newCommunity, name: e.target.value })} 
+                                    required 
+                                />
                             </div>
-                            <div className="form-group flex-group">
-                                <div>
+
+                            <div className="form-row flex">
+                                <div className="form-group flex-1 mr-2">
+                                    <label className="neo-label">Category</label>
                                     <select className="neo-input" value={newCommunity.mealTime} onChange={(e) => setNewCommunity({ ...newCommunity, mealTime: e.target.value })}>
-                                        <option value="breakfast" disabled={isMealTimePassed('breakfast', newCommunity.mealDate)}>Breakfast {isMealTimePassed('breakfast', newCommunity.mealDate) ? '(Passed)' : ''}</option>
-                                        <option value="lunch" disabled={isMealTimePassed('lunch', newCommunity.mealDate)}>Lunch {isMealTimePassed('lunch', newCommunity.mealDate) ? '(Passed)' : ''}</option>
-                                        <option value="snacks" disabled={isMealTimePassed('snacks', newCommunity.mealDate)}>Snacks {isMealTimePassed('snacks', newCommunity.mealDate) ? '(Passed)' : ''}</option>
-                                        <option value="dinner" disabled={isMealTimePassed('dinner', newCommunity.mealDate)}>Dinner {isMealTimePassed('dinner', newCommunity.mealDate) ? '(Passed)' : ''}</option>
+                                        <option value="breakfast">Breakfast</option>
+                                        <option value="lunch">Lunch</option>
+                                        <option value="snacks">Snacks</option>
+                                        <option value="dinner">Dinner</option>
                                     </select>
                                 </div>
-                                <div style={{ marginLeft: '1rem', flex: 1 }}>
-                                    <label>Meal Date</label>
+                                <div className="form-group flex-1">
+                                    <label className="neo-label">When?</label>
                                     <select className="neo-input" value={newCommunity.mealDate} onChange={(e) => setNewCommunity({ ...newCommunity, mealDate: e.target.value })}>
                                         <option value={todayStr}>Today ({new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })})</option>
                                         <option value={tomorrowStr}>Tomorrow ({tomorrowDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })})</option>
                                     </select>
                                 </div>
                             </div>
+
                             <div className="form-group">
-                                <label>Max Members (2-10)</label>
-                                <input type="number" className="neo-input" value={newCommunity.maxMembers} onChange={(e) => setNewCommunity({ ...newCommunity, maxMembers: parseInt(e.target.value) })} min="2" max="10" required />
+                                <label className="neo-label">Group Size (Max {newCommunity.maxMembers})</label>
+                                <div className="range-container">
+                                    <input type="range" min="2" max="10" step="1" value={newCommunity.maxMembers} onChange={(e) => setNewCommunity({ ...newCommunity, maxMembers: parseInt(e.target.value) })} />
+                                    <span className="range-value">{newCommunity.maxMembers} members</span>
+                                </div>
                             </div>
+
                             <div className="form-group">
-                                <label>Description</label>
-                                <textarea className="neo-input" value={newCommunity.description} onChange={(e) => setNewCommunity({ ...newCommunity, description: e.target.value })} rows="2" />
+                                <label className="neo-label">Brief Description</label>
+                                <textarea 
+                                    className="neo-input" 
+                                    placeholder="Tell them what to expect..." 
+                                    value={newCommunity.description} 
+                                    onChange={(e) => setNewCommunity({ ...newCommunity, description: e.target.value })} 
+                                    rows="1" 
+                                />
                             </div>
+
                             <div className="form-group">
-                                <label>Interests (Up to 5)</label>
-                                <div className="interests-chips-grid" style={{ maxHeight: '120px', overflowY: 'auto' }}>
+                                <label className="neo-label">Select Tags (Up to 5)</label>
+                                <div className="interests-scroll-container">
                                     {PREDEFINED_INTERESTS.map(interest => {
                                         const isSelected = newCommunity.interests.includes(interest);
                                         return (
-                                            <button key={interest} type="button" style={{ fontSize: '0.8rem', padding: '0.4rem' }} className={`interest-chip-btn ${isSelected ? 'selected' : ''}`} onClick={() => toggleInterest(interest)}>
+                                            <button key={interest} type="button" className={`interest-pill ${isSelected ? 'active' : ''}`} onClick={() => toggleInterest(interest)}>
                                                 {interest}
                                             </button>
                                         );
                                     })}
                                 </div>
                             </div>
-                            <div className="modal-actions">
-                                <button type="button" className="neo-btn" onClick={() => setShowCreateModal(false)}>Cancel</button>
-                                <button type="submit" className="neo-btn neo-btn-secondary">Create</button>
+
+                            <div className="modal-footer pt-3">
+                                <button type="submit" className="neo-btn neo-btn-primary w-full py-3" style={{ fontSize: '1.1rem' }}>
+                                    🚀 Launch Group
+                                </button>
+                                <p className="text-center text-xs text-muted mt-2">The group will dissolve automatically after the slot ends.</p>
                             </div>
                         </form>
                     </div>

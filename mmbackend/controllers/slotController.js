@@ -176,12 +176,17 @@ const getSlotStatus = async (req, res) => {
     // Fetch groupSize one last time to ensure it's in the response
     const currentPref = await Preference.findOne({ user: currentUser._id });
   
+    // ── 5. Send unified response ─────────────────────────────────────────────
+    const [mDate, mType] = slotId.split("_");
+  
     return res.json({
       slotId,
+      mealDate: mDate,
+      mealTime: mType,
       slotStatus,
       state,
       userId: currentUser._id,
-      groupSize: currentPref?.groupSize || 2, // 🔥 NEW: Tell frontend which mode we're in
+      groupSize: currentPref?.groupSize || 2, 
       availableUsers,
       likesReceived,
       matchData,
