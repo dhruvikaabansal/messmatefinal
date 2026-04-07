@@ -55,7 +55,7 @@ const Navbar = () => {
           <span className="neo-brand disabled" title="Complete your profile to unlock navigation">MessMate 🍽️</span>
         )}
 
-        <div className="neo-navbar-right flex">
+        <div className="neo-navbar-right flex mobile-hide-flex">
           {token && (
             <>
               <Link to="/discover" className={`neo-nav-link ${isActive('/discover') ? 'active' : ''}`}>

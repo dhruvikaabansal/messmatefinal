@@ -41,15 +41,16 @@ const LayoutWrapper = ({ children }) => {
   
   // Routes where we DON'T want the global Nav or Branding
   const publicRoutes = ['/', '/login', '/register'];
-  const showNavbar = token && !publicRoutes.includes(location.pathname);
+  // 🔥 Force a re-render check and ensure we don't show on profile setup if incomplete
+  const showNav = token && !publicRoutes.includes(location.pathname) && location.pathname !== '/profile';
 
   return (
     <>
-      {showNavbar && <Navbar />}
+      {showNav && <Navbar />}
       <div className="main-content-wrapper">
         {children}
       </div>
-      {showNavbar && <BottomNav />}
+      {showNav && <BottomNav />}
     </>
   );
 };

@@ -208,8 +208,9 @@
     }
 
     .floating-actions {
-        bottom: 80px; /* Above BottomNav */
-        gap: 1.5rem;
+        bottom: 95px; /* Stay clearly above the 70px BottomNav */
+        gap: 2rem;
+        z-index: 1100; /* Above BottomNav's 1000 */
     }
 
     .action-btn {

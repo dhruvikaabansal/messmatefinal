@@ -353,24 +353,29 @@
     }
 
     .past-match-img {
-        width: 48px;
-        height: 48px;
+        width: 44px;
+        height: 44px;
     }
 
     .past-match-info h3 {
-        font-size: 0.9rem;
+        font-size: 0.85rem;
     }
 
     .past-college {
-        font-size: 0.7rem;
+        font-size: 0.65rem;
     }
 
     .match-action-btns {
         gap: 0.5rem;
+        margin-top: 1rem;
     }
 
     .match-btn-success, .match-btn-unmatch {
-        font-size: 0.9rem;
-        padding: 0.8rem;
+        font-size: 0.95rem;
+        padding: 0.9rem;
+    }
+
+    .no-active-match {
+        padding: 2rem 1rem;
     }
 }
