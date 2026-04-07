@@ -281,21 +281,15 @@ const Community = () => {
     // ── STATE: IDLE / LIKED — Browse & Create ─────────────────────────────────
     return (
         <div className="container community-page pb-5">
-            {/* 🚥 SLOT SELECTOR INDICATION */}
-            <div className="slot-indicator-banner neo-card">
-                <div className="slot-info-pill">
-                    <span className="pulse-icon">📍</span>
-                    <span>Viewing: <strong>{slotData?.mealDate === todayStr ? 'Today' : slotData?.mealDate}</strong> · <strong className="capitalize">{slotData?.mealTime}</strong></span>
-                </div>
-                <button className="neo-btn neo-btn-sm" onClick={() => navigate('/preferences?mode=edit')}>
-                    Change Slot ⚙️
-                </button>
-            </div>
-
             <div className="community-header">
                 <div className="header-info">
-                    <h1>Community Tables 👥</h1>
-                    <p className="header-subtitle">Parties of 3 or 4 are matched here!</p>
+                    <div className="flex items-center" style={{ gap: '0.5rem' }}>
+                        <h1>Community Tables 👥</h1>
+                        <span className="slot-pill-sm">
+                            {slotData?.mealTime || '...'} · {slotData?.mealDate === todayStr ? 'Today' : (slotData?.mealDate || '...')}
+                        </span>
+                    </div>
+                    <p className="header-subtitle">Join or create a group table. <span className="change-slot-link" onClick={() => navigate('/preferences?mode=edit')}>Change Slot ⚙️</span></p>
                 </div>
                 <button
                     className="neo-btn neo-btn-secondary create-group-float"

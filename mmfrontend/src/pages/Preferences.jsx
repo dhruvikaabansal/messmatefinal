@@ -28,16 +28,6 @@ const Preferences = () => {
     const isEditMode = new URLSearchParams(location.search).get('mode') === 'edit';
 
     useEffect(() => {
-        // Initial setup for new user
-        if (!loading) {
-            setFormData(prev => ({
-                ...prev,
-                mealTime: getFirstAvailableMeal(prev.mealDate)
-            }));
-        }
-    }, [loading]);
-
-    useEffect(() => {
         const fetchData = async () => {
             try {
                 // Fetch Profile Status
@@ -50,14 +40,21 @@ const Preferences = () => {
                 // Fetch Preferences
                 const res = await api.get('/preferences');
                 const data = res.data?.preferences || res.data;
-                if (data) {
+                if (data && data.mealTime) {
+                    // ✅ USER HAS PREFS: Respect them!
                     setFormData({
-                        mealTime: data.mealTime || 'lunch',
+                        mealTime: data.mealTime,
                         preferredGender: data.preferredGender || 'any',
                         groupSize: data.groupSize || 2,
                         mealDate: data.mealDate || todayStr,
                         isAvailable: data.isAvailable ?? true
                     });
+                } else {
+                    // ✅ NEW USER: Default to first available meal
+                    setFormData(prev => ({
+                        ...prev,
+                        mealTime: getFirstAvailableMeal(prev.mealDate)
+                    }));
                 }
                 setLoading(false);
             } catch (err) {
