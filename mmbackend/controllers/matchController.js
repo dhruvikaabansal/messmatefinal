@@ -348,7 +348,10 @@ const getLikesReceived = async (req, res) => {
     const myState = await getOrCreateState(currentUser._id, slotId);
 
     if (myState.state === "matched") {
-      return res.json({ likes: [], isLocked: true, message: "You already have a match for this slot! 🔒" });
+      return res.json({ likes: [], isLocked: true, lockType: 'match', message: "You already have a 1-1 match for this slot! 🔒" });
+    }
+    if (myState.state === "in_community") {
+      return res.json({ likes: [], isLocked: true, lockType: 'community', message: "You're already in a group meal for this slot! 👥" });
     }
 
     const likes = await Like.find({

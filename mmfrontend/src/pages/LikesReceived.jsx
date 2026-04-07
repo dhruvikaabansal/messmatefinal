@@ -9,6 +9,7 @@ const LikesReceived = () => {
     const [likes, setLikes] = useState([]);
     const [loading, setLoading] = useState(true);
     const [isLocked, setIsLocked] = useState(false);
+    const [lockType, setLockType] = useState('match'); // 'match' or 'community'
 
     useEffect(() => {
         fetchLikes();
@@ -19,6 +20,7 @@ const LikesReceived = () => {
             const res = await api.get('/match/likes-received');
             if (res.data.isLocked) {
                 setIsLocked(true);
+                setLockType(res.data.lockType || 'match');
             } else {
                 setLikes(res.data.likes);
             }
@@ -54,8 +56,15 @@ const LikesReceived = () => {
             <div className="container discover-page-v3 match-locked">
                 <div className="neo-card active-match-card">
                     <div className="match-header">
-                        <h1>🔒 Page Locked</h1>
-                        <p>You have an active match! You cannot accept new likes right now.</p>
+                        <h1>🔒 {lockType === 'community' ? 'Group Mode Active' : 'Match Locked'}</h1>
+                        <p>
+                            {lockType === 'community' 
+                              ? "You're already in a group meal for this slot! You cannot accept individual matches right now. 👥"
+                              : "You already have an active 1-1 match! You cannot accept new likes for this slot. 🔒"}
+                        </p>
+                        <button className="neo-btn neo-btn-primary" onClick={() => navigate(lockType === 'community' ? '/community' : '/matches')}>
+                            View Active {lockType === 'community' ? 'Group' : 'Match'}
+                        </button>
                     </div>
                 </div>
             </div>
