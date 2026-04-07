@@ -10,6 +10,7 @@ const LikesReceived = () => {
     const [loading, setLoading] = useState(true);
     const [isLocked, setIsLocked] = useState(false);
     const [lockType, setLockType] = useState('match'); // 'match' or 'community'
+    const [slotInfo, setSlotInfo] = useState({ mealTime: 'your slot', mealDate: '' });
 
     useEffect(() => {
         fetchLikes();
@@ -18,6 +19,7 @@ const LikesReceived = () => {
     const fetchLikes = async () => {
         try {
             const res = await api.get(`/match/likes-received?t=${Date.now()}`);
+            setSlotInfo({ mealTime: res.data.mealTime, mealDate: res.data.mealDate });
             if (res.data.isLocked) {
                 setIsLocked(true);
                 setLockType(res.data.lockType || 'match');
@@ -78,7 +80,13 @@ const LikesReceived = () => {
 
     return (
         <div className="container likes-received-page">
-            <h1 className="page-title">Interested MessMates ❤️</h1>
+            <div className="page-header-context">
+                <h1 className="page-title">Interested MessMates ❤️</h1>
+                <div className="current-slot-indicator">
+                    🍱 Viewing for: <strong className="capitalize">{slotInfo.mealTime}</strong> · {slotInfo.mealDate}
+                </div>
+            </div>
+            
             <p className="page-subtitle">These people want to grab a meal with you in your current slot.</p>
             
             {likes.length === 0 ? (

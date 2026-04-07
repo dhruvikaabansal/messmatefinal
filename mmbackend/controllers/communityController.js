@@ -176,6 +176,13 @@ const createCommunity = async (req, res) => {
     // 5. 🔥 Update creator's state → in_community
     await setState(userId, slotId, "in_community", { communityId: newCommunity._id });
 
+    // 6. 🔥 🧹 MARKET CLEANUP: Automatically 'skip' all pending 1-1 likes for this slot
+    // to prevent ghost matching conflicts while in a community.
+    await Like.updateMany(
+      { slotId, $or: [{ fromUser: userId }, { toUser: userId }], status: "pending" },
+      { $set: { status: "skipped" } }
+    );
+
     return res.status(201).json({
       message: "Community created!",
       community: newCommunity,
@@ -258,6 +265,13 @@ const joinCommunity = async (req, res) => {
 
     // 7. 🔥 Update user's state → in_community
     await setState(userId, slotId, "in_community", { communityId: community._id });
+
+    // 8. 🔥 🧹 MARKET CLEANUP: Automatically 'skip' all pending 1-1 likes for this slot
+    // to prevent ghost matching conflicts while in a community.
+    await Like.updateMany(
+      { slotId, $or: [{ fromUser: userId }, { toUser: userId }], status: "pending" },
+      { $set: { status: "skipped" } }
+    );
 
     return res.json({ message: "Joined successfully!", community });
   } catch (error) {

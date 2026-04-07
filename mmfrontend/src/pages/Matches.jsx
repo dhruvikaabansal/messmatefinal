@@ -10,6 +10,7 @@ const Matches = () => {
     const [pastMatches, setPastMatches] = useState([]);
     const [loading, setLoading] = useState(true);
     const [actionFeedback, setActionFeedback] = useState('');
+    const [slotInfo, setSlotInfo] = useState({ mealTime: 'your slot', mealDate: '' });
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -20,6 +21,7 @@ const Matches = () => {
         try {
             setLoading(true);
             const listRes = await api.get('/match/list');
+            setSlotInfo({ mealTime: listRes.data.mealTime, mealDate: listRes.data.mealDate });
             const allMatches = listRes.data.matches || [];
             
             const active = allMatches.filter(m => m.status === 'active');
@@ -66,7 +68,12 @@ const Matches = () => {
     return (
         <div className="container matches-page">
             <div className="matches-header">
-                <h1>Your Matches 💬</h1>
+                <div className="page-header-context">
+                    <h1>Your Matches 💬</h1>
+                    <div className="current-slot-indicator">
+                        🍱 Viewing for: <strong className="capitalize">{slotInfo.mealTime}</strong> · {slotInfo.mealDate}
+                    </div>
+                </div>
                 <p>Your active meal partner and past connections.</p>
             </div>
 

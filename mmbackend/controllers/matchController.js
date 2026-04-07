@@ -257,6 +257,16 @@ const likeUser = async (req, res) => {
     });
 
     if (reciprocalLike) {
+      // 🎉 FINAL CHECK: Ensure neither user joined a community in the meantime
+      const myLatestState = await getOrCreateState(fromUserId, slotId);
+      const targetLatestState = await getOrCreateState(targetUserId, slotId);
+
+      if (myLatestState.state === "in_community" || targetLatestState.state === "in_community") {
+        return res.status(400).json({ 
+          message: "Conflict: One of you has already joined a group table for this slot. 👥" 
+        });
+      }
+
       // 🎉 MUTUAL MATCH — create match and update both states
       const newMatch = await Match.create({
         users: [fromUserId, targetUserId],
@@ -391,7 +401,11 @@ const getLikesReceived = async (req, res) => {
       })
       .filter(Boolean);
 
-    return res.json({ likes: usersWhoLiked });
+    return res.json({ 
+      likes: usersWhoLiked,
+      mealTime: activePref?.mealTime || 'Current',
+      mealDate: activePref?.mealDate || 'Slot'
+    });
   } catch (error) {
     console.error("[matchController] getLikesReceived:", error);
     res.status(500).json({ message: error.message });
@@ -451,7 +465,12 @@ const getMatches = async (req, res) => {
       (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
     );
 
-    return res.json({ matches: sorted });
+    const { pref } = await resolveSlot(currentUser._id);
+    return res.json({ 
+      matches: sorted,
+      mealTime: pref?.mealTime || 'Current',
+      mealDate: pref?.mealDate || 'Slot'
+    });
   } catch (error) {
     console.error("[matchController] getMatches:", error);
     res.status(500).json({ message: error.message });
