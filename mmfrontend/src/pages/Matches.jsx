@@ -67,14 +67,18 @@ const Matches = () => {
 
     return (
         <div className="container matches-page">
-            <div className="matches-header">
-                <div className="page-header-context">
+            <div className="community-header-premium" style={{ marginBottom: '2rem' }}>
+                <div className="header-main-info">
                     <h1>Your Matches 💬</h1>
-                    <div className="current-slot-indicator">
-                        🍱 Viewing for: <strong className="capitalize">{slotInfo.mealTime}</strong> · {slotInfo.mealDate}
+                    <div className="community-context-bar">
+                        <span className="slot-context-pill" style={{ background: 'var(--accent)', padding: '0.4rem 0.8rem', border: '3px solid #000', fontWeight: '800', marginRight: '0.5rem' }}>
+                            <span className="capitalize">{slotInfo.mealTime}</span> · {slotInfo.mealDate}
+                        </span>
+                        <button className="neo-btn change-slot-btn-minimal" onClick={() => navigate('/preferences?mode=edit')} style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}>
+                             ⚙️ Change
+                        </button>
                     </div>
                 </div>
-                <p>Your active meal partner and past connections.</p>
             </div>
 
             {/* ===== ACTIVE MATCHES ===== */}

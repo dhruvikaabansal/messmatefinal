@@ -224,6 +224,20 @@ const Discover = () => {
 
     return (
         <div className="container discover-page-v3">
+            <div className="community-header-premium" style={{ marginBottom: '2rem' }}>
+                <div className="header-main-info">
+                    <h1>Discover 👋</h1>
+                    <div className="community-context-bar">
+                        <span className="slot-context-pill" style={{ background: 'var(--accent)', padding: '0.4rem 0.8rem', border: '3px solid #000', fontWeight: '800', marginRight: '0.5rem' }}>
+                            {slotData.mealTime} · {slotData.mealDate === todayStr ? 'Today' : slotData.mealDate}
+                        </span>
+                        <button className="neo-btn change-slot-btn-minimal" onClick={() => navigate('/preferences?mode=edit')} style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}>
+                             ⚙️ Change
+                        </button>
+                    </div>
+                </div>
+            </div>
+
             <AnimatePresence mode="wait">
                 {!currentUser ? (
                     <motion.div
