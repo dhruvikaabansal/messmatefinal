@@ -1,6 +1,7 @@
 import { BACKEND_URL } from './api';
 
-const AVATAR_COLORS = ['#ff5a3c', '#ffb703', '#0f9d58', '#6c3ce9', '#e6421f', '#2563eb'];
+// Saturated enough that white initials stay legible on every one of them.
+const AVATAR_COLORS = ['#ff2d87', '#d6006a', '#8b5cf6', '#6d28d9', '#00a173', '#e11d48'];
 
 const initials = (name = '') =>
   name
@@ -24,7 +25,7 @@ export const initialsAvatar = (name = 'User') => {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
     <rect width="200" height="200" fill="${color}"/>
     <text x="100" y="100" dy="0.35em" text-anchor="middle" fill="#fff"
-      font-family="Inter, system-ui, sans-serif" font-size="82" font-weight="700">${initials(name)}</text>
+      font-family="Inter, system-ui, sans-serif" font-size="68" font-weight="700">${initials(name)}</text>
   </svg>`;
   return `data:image/svg+xml,${encodeURIComponent(svg)}`;
 };
