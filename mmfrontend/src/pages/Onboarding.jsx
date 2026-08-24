@@ -15,6 +15,23 @@ const INTERESTS = [
   'trekking', 'gaming', 'dance', 'theatre', 'debate', 'volunteering',
 ];
 
+/**
+ * Common campus societies, offered as chips.
+ *
+ * Clubs used to be a free-text box. That made the signal near-useless —
+ * "Dance Society", "dance soc" and "Dancing Club" are three different strings
+ * that never match each other — and the comma parsing was broken anyway, so
+ * only one club could ever be entered. Picking from a shared list means two
+ * people in the same society actually match on it.
+ */
+const CLUB_CATALOG = [
+  'Dance society', 'Music society', 'Dramatics society', 'Debate society',
+  'Robotics club', 'Coding club', 'Entrepreneurship cell', 'Design club',
+  'Photography club', 'Film club', 'Literary society', 'Quiz club',
+  'Football team', 'Cricket team', 'Basketball team', 'Athletics',
+  'NSS / volunteering', 'Student council', 'Fest organising team',
+];
+
 const PROMPT_QUESTIONS = [
   'My go-to mess order',
   "A hill I'll die on",
@@ -91,6 +108,32 @@ const Onboarding = () => {
   }, [toast]);
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+
+  const [clubDraft, setClubDraft] = useState('');
+
+  const sameClub = (a, b) => a.trim().toLowerCase() === b.trim().toLowerCase();
+  const hasClub = (c) => form.clubs.some((x) => sameClub(x, c));
+
+  const toggleClub = (c) =>
+    setForm((f) => ({
+      ...f,
+      clubs: hasClub(c) ? f.clubs.filter((x) => !sameClub(x, c)) : [...f.clubs, c].slice(0, 8),
+    }));
+
+  /** Anything the user typed that isn't in the catalog, shown as removable chips. */
+  const customClubs = form.clubs.filter(
+    (c) => !CLUB_CATALOG.some((k) => sameClub(k, c))
+  );
+
+  const addCustomClub = () => {
+    const value = clubDraft.trim().replace(/\s+/g, ' ');
+    if (!value) return;
+    // Match it to the catalog if it's just a casing difference.
+    const known = CLUB_CATALOG.find((k) => sameClub(k, value));
+    const label = known || value;
+    if (!hasClub(label)) toggleClub(label);
+    setClubDraft('');
+  };
 
   const toggleInterest = (i) =>
     setForm((f) => ({
@@ -318,15 +361,64 @@ const Onboarding = () => {
             </div>
 
             <div className="field">
-              <label className="label" htmlFor="clubs">Clubs or societies</label>
-              <input
-                id="clubs"
-                className="input"
-                placeholder="Robotics club, Dance society"
-                value={form.clubs.join(', ')}
-                onChange={(e) => set('clubs', e.target.value.split(',').map((c) => c.trim()).filter(Boolean))}
-              />
-              <span className="hint">Comma separated. Shared clubs are a strong match signal.</span>
+              <span className="label">
+                Clubs or societies <span className="muted small">(optional)</span>
+              </span>
+              <div className="chip-group">
+                {CLUB_CATALOG.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    className="chip chip-toggle"
+                    aria-pressed={hasClub(c)}
+                    onClick={() => toggleClub(c)}
+                  >
+                    {c}
+                  </button>
+                ))}
+              </div>
+
+              {customClubs.length > 0 && (
+                <div className="chip-group">
+                  {customClubs.map((c) => (
+                    <span key={c} className="chip chip--plum">
+                      {c}
+                      <button
+                        type="button"
+                        onClick={() => toggleClub(c)}
+                        aria-label={`Remove ${c}`}
+                        style={{
+                          background: 'none', border: 0, cursor: 'pointer',
+                          color: 'inherit', padding: 0, marginLeft: 2, fontWeight: 800,
+                        }}
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              <div className="row" style={{ gap: 8 }}>
+                <input
+                  id="clubs"
+                  className="input grow"
+                  placeholder="Not listed? Type it and press Enter"
+                  value={clubDraft}
+                  onChange={(e) => setClubDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ',') {
+                      e.preventDefault();
+                      addCustomClub();
+                    }
+                  }}
+                  maxLength={40}
+                />
+                <button type="button" className="btn btn--sm" onClick={addCustomClub} disabled={!clubDraft.trim()}>
+                  Add
+                </button>
+              </div>
+              <span className="hint">Being in the same society is one of the strongest match signals.</span>
             </div>
           </>
         )}

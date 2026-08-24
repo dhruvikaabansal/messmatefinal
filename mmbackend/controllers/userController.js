@@ -81,7 +81,20 @@ const updateUserProfile = async (req, res) => {
     }
 
     if (b.clubs !== undefined && Array.isArray(b.clubs)) {
-      user.clubs = [...new Set(b.clubs.map((c) => String(c).trim()).filter(Boolean))].slice(0, 8);
+      // Dedupe case-insensitively but keep the first spelling for display, so
+      // "Dance Society" and "dance society" are one club rather than two that
+      // never match each other.
+      const seen = new Set();
+      user.clubs = b.clubs
+        .map((c) => String(c).trim().replace(/\s+/g, " "))
+        .filter(Boolean)
+        .filter((c) => {
+          const key = c.toLowerCase();
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        })
+        .slice(0, 8);
     }
 
     if (b.bio !== undefined) user.bio = String(b.bio).slice(0, 180);
