@@ -1,11 +1,8 @@
 const mongoose = require("mongoose");
 
 /**
- * Match — A confirmed 1-on-1 meal match between two users.
- *
- * Matches are SLOT-SCOPED and TEMPORARY.
- * They are automatically dissolved when the slot expires (via cleanup job).
- * slotId format: "YYYY-MM-DD_mealType"
+ * Match — a confirmed 1-on-1 meal between two users, scoped to one slot.
+ * Dissolved automatically when the slot expires (see utils/cleanup.js).
  */
 const matchSchema = new mongoose.Schema(
   {
@@ -16,32 +13,25 @@ const matchSchema = new mongoose.Schema(
         required: true,
       },
     ],
-    // 🔥 NEW: Canonical slot identifier
-    slotId: {
-      type: String,
-      // Not required — backward compat with old match documents
-    },
-    // Retained for backward compatibility and human-readable queries
+    slotId: { type: String, index: true },
     mealTime: {
       type: String,
       enum: ["breakfast", "lunch", "snacks", "dinner"],
     },
-    mealDate: {
-      type: String,
-    },
+    mealDate: { type: String },
     status: {
       type: String,
-      enum: ["active", "completed", "expired"],
+      enum: ["active", "completed", "expired", "cancelled"],
       default: "active",
     },
+    /** Sorting + unread badges in the Matches list without a second query. */
+    lastMessageAt: { type: Date, default: null },
+    lastMessagePreview: { type: String, default: "" },
   },
   { timestamps: true }
 );
 
-// Fast lookup by slotId (used by cleanup + exclusivity checks)
-matchSchema.index({ slotId: 1 });
-
-// Fast lookup by user (used by getCandidates to check if user is matched)
 matchSchema.index({ users: 1, status: 1 });
+matchSchema.index({ slotId: 1, status: 1 });
 
 module.exports = mongoose.model("Match", matchSchema);

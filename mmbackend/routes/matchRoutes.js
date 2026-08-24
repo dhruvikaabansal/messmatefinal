@@ -1,19 +1,28 @@
 const express = require("express");
 const router = express.Router();
-const { getCandidates, likeUser, skipUser, getMatches, getLikesReceived, ignoreLike, unmatchUser, completeMatch } = require("../controllers/matchController");
-const { protect } = require("../middleware/authMiddleware");
+const {
+  likeUser,
+  skipUser,
+  undoLastSkip,
+  getMatches,
+  getLikesReceived,
+  ignoreLike,
+  unmatchUser,
+  completeMatch,
+} = require("../controllers/matchController");
+const { protect, requireCompleteProfile } = require("../middleware/authMiddleware");
+const { actionLimiter } = require("../middleware/rateLimit");
 
-router.get("/candidates", protect, getCandidates);
-router.post("/like", protect, likeUser);
-router.post("/skip", protect, skipUser);
-router.get("/received", protect, getLikesReceived);
-router.get("/likes-received", protect, getLikesReceived); // Matching the frontend request
+router.post("/like", protect, requireCompleteProfile, actionLimiter, likeUser);
+router.post("/skip", protect, requireCompleteProfile, actionLimiter, skipUser);
+router.post("/undo", protect, requireCompleteProfile, undoLastSkip);
 router.post("/ignore", protect, ignoreLike);
-router.get("/list", protect, getMatches); // Matching the frontend request
-router.get("/", protect, getMatches);
 router.post("/unmatch", protect, unmatchUser);
 router.post("/complete", protect, completeMatch);
 
-module.exports = router;
+router.get("/likes-received", protect, getLikesReceived);
+router.get("/received", protect, getLikesReceived); // legacy alias
+router.get("/list", protect, getMatches);
+router.get("/", protect, getMatches);
 
-
+module.exports = router;

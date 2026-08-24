@@ -1,501 +1,453 @@
 /**
- * matchController.js — Slot-State-First architecture.
+ * matchController.js — 1-on-1 matching.
  *
- * ARCHITECTURE RULE:
- *   Every function must:
- *   1. Validate the slot is active (not expired)
- *   2. Fetch UserSlotState for the current user
- *   3. Decide action based on STATE — never based on counting documents
- *   4. Update UserSlotState after any action
- *
- * State is the single source of truth.
- * Actions never override state.
+ * Rules that hold everywhere:
+ *   • Every action is scoped to a slot and refuses to run on a closed slot.
+ *   • UserSlotState is the single source of truth for "can I do this".
+ *   • Every mutation of someone else's data verifies ownership first.
  */
 
-const Preference = require("../models/Preference");
+const mongoose = require("mongoose");
+const Like = require("../models/Like");
 const Match = require("../models/Match");
 const User = require("../models/User");
-const Like = require("../models/Like");
-const Community = require("../models/Community");
+const Message = require("../models/Message");
+const Preference = require("../models/Preference");
 const UserSlotState = require("../models/UserSlotState");
-const cosineSimilarity = require("../utils/cosineSimilarity");
-const { buildSlotId, isSlotActive, slotIdFromPref } = require("../utils/slotUtils");
 
-// ─── INTERNAL HELPERS ────────────────────────────────────────────────────────
+const { isSlotActive, resolveSlotFromPref } = require("../utils/slotUtils");
+const { getOrCreateState, setState } = require("../services/feedService");
+const { calculateAge } = require("../utils/ageUtils");
 
-/**
- * Get-or-create a UserSlotState document (upsert pattern).
- * Uses MongoDB's findOneAndUpdate with upsert to avoid race conditions.
- */
-const getOrCreateState = async (userId, slotId) => {
-  return UserSlotState.findOneAndUpdate(
-    { userId, slotId },
-    { $setOnInsert: { userId, slotId, state: "idle" } },
-    { upsert: true, new: true }
-  );
-};
+const isId = (v) => mongoose.Types.ObjectId.isValid(v);
 
 /**
- * Set a user's state for a given slot.
- */
-const setState = async (userId, slotId, state, extra = {}) => {
-  return UserSlotState.findOneAndUpdate(
-    { userId, slotId },
-    { $set: { state, matchId: null, communityId: null, ...extra } },
-    { upsert: true, new: true }
-  );
-};
-
-/**
- * Resolve the slotId from either a preference doc or a provided pref object.
- * Returns { slotId, pref, error } — caller handles error.
+ * Resolve the caller's active slot, self-healing a stale preference.
  */
 const resolveSlot = async (userId) => {
   const pref = await Preference.findOne({ user: userId });
-  if (!pref) return { slotId: null, pref: null, error: "Set your preferences first." };
-  const slotId = slotIdFromPref(pref);
-  return { slotId, pref, error: null };
-};
+  if (!pref) return { error: "Set your meal preferences first.", code: 400 };
 
-// ─── GET CANDIDATES ───────────────────────────────────────────────────────────
-
-/**
- * GET /api/match/candidates
- * Returns sorted list of users available to swipe on in the current slot.
- */
-const getCandidates = async (req, res) => {
-  try {
-    const currentUser = req.user;
-
-    // 1. Resolve slot
-    const { slotId, pref, error } = await resolveSlot(currentUser._id);
-    if (error) return res.json({ candidates: [], message: error });
-
-    // 2. Validate slot is active
-    if (!isSlotActive(slotId)) {
-      return res.json({
-        candidates: [],
-        slotStatus: "closed",
-        message: `This meal slot has ended. Update your preferences to a future slot.`,
-      });
-    }
-
-    // 3. Check current user's state for this slot
-    const myState = await getOrCreateState(currentUser._id, slotId);
-
-    if (myState.state === "matched") {
-      // Return match details so UI can show the locked screen
-      const match = await Match.findById(myState.matchId).populate(
-        "users",
-        "name birthday profilePic college"
-      );
-      const partner = match?.users.find(
-        (u) => u._id.toString() !== currentUser._id.toString()
-      );
-      return res.json({
-        candidates: [],
-        isLocked: true,
-        slotStatus: "active",
-        activeMatch: match
-          ? { _id: match._id, user: partner, mealTime: match.mealTime, mealDate: match.mealDate }
-          : null,
-        message: `You're matched for ${pref.mealTime}! 🔒`,
-      });
-    }
-
-    if (myState.state === "in_community") {
-      const community = await Community.findById(myState.communityId);
-      return res.json({
-        candidates: [],
-        isLocked: true,
-        slotStatus: "active",
-        activeCommunity: community
-          ? { _id: community._id, name: community.name, mealTime: community.mealTime, mealDate: community.mealDate }
-          : null,
-        message: `You're in a group meal for ${pref.mealTime}! 👥`,
-      });
-    }
-
-    // 4. Fetch candidate states: only idle/liked in same slot
-    const candidateStates = await UserSlotState.find({
-      slotId,
-      state: { $in: ["idle", "liked"] },
-      userId: { $ne: currentUser._id },
-    });
-
-    const candidateIds = candidateStates.map((s) => s.userId);
-
-    // 🔥 NEW: Filter out users who are NOT in Solo Mode (groupSize < 3)
-    let eligibleSoloIds = [];
-    if (candidateIds.length > 0) {
-      const candidatePrefs = await Preference.find({
-        user: { $in: candidateIds },
-        groupSize: { $lt: 3 },
-      });
-      eligibleSoloIds = candidatePrefs.map((p) => p.user);
-    }
-
-    // 5. Remove already-interacted users
-    const prevInteractions = await Like.find({
-      fromUser: currentUser._id,
-      slotId,
-    });
-    const interactedSet = new Set(prevInteractions.map((l) => l.toUser.toString()));
-
-    // 6. Filter by college + gender preference
-    const genderFilter =
-      pref.preferredGender && pref.preferredGender !== "any"
-        ? { gender: pref.preferredGender }
-        : {};
-
-    const users = await User.find({
-      _id: { $in: eligibleSoloIds, $nin: [...interactedSet] },
-      college: currentUser.college,
-      ...genderFilter,
-    }).select("name birthday gender college bio interests profilePic prompts");
-
-    // 7. Rank by interest + age similarity
-    const ranked = users
-      .map((u) => {
-        const interestScore = cosineSimilarity(
-          currentUser.interests || [],
-          u.interests || []
-        );
-        const ageDiff = Math.abs((currentUser.age || 20) - (u.age || 20));
-        const ageScore = Math.max(0, 1 - ageDiff / 10);
-        const sharedInterests = (currentUser.interests || []).filter((i) =>
-          (u.interests || []).includes(i)
-        );
-        return {
-          ...u.toObject(),
-          matchScore: interestScore * 0.7 + ageScore * 0.3,
-          sharedInterests,
-        };
-      })
-      .filter((u) => u.matchScore > 0)
-      .sort((a, b) => b.matchScore - a.matchScore);
-
-    return res.json({ candidates: ranked, slotStatus: "active" });
-  } catch (error) {
-    console.error("[matchController] getCandidates:", error);
-    res.status(500).json({ message: error.message });
+  const resolved = resolveSlotFromPref(pref);
+  if (resolved.healed) {
+    pref.mealDate = resolved.mealDate;
+    pref.mealTime = resolved.mealTime;
+    await pref.save();
   }
+  return { slotId: resolved.slotId, pref, error: null };
 };
 
-// ─── LIKE USER ────────────────────────────────────────────────────────────────
+// ─── LIKE ───────────────────────────────────────────────────────────────────
 
 /**
- * POST /api/match/like  { targetUserId }
- * Like another user in the current slot.
- * On mutual like → both states become "matched".
+ * POST /api/match/like { targetUserId }
+ *
+ * Mutual like → both users are claimed into a match atomically. The claim is
+ * conditional on each side still being idle/liked, so two people liking each
+ * other at the same instant can never produce two matches or a half-match.
  */
 const likeUser = async (req, res) => {
   try {
     const { targetUserId } = req.body;
     const fromUserId = req.user._id;
 
-    if (!targetUserId) {
-      return res.status(400).json({ message: "targetUserId is required" });
+    if (!isId(targetUserId)) {
+      return res.status(400).json({ message: "A valid targetUserId is required." });
+    }
+    if (targetUserId === fromUserId.toString()) {
+      return res.status(400).json({ message: "You cannot like yourself." });
     }
 
-    // 1. Resolve slot
-    const { slotId, pref, error } = await resolveSlot(fromUserId);
-    if (error) return res.status(400).json({ message: error });
+    const { slotId, pref, error, code } = await resolveSlot(fromUserId);
+    if (error) return res.status(code || 400).json({ message: error });
 
-    // 2. Validate slot is active
     if (!isSlotActive(slotId)) {
-      return res.status(400).json({
+      return res.status(409).json({
         slotStatus: "closed",
-        message: "This meal slot has already ended. You cannot like in a closed slot.",
+        message: "This meal slot has closed. Pick the next one to keep going.",
       });
     }
 
-    // 3. Check sender's state — must be idle or liked
-    const myState = await getOrCreateState(fromUserId, slotId);
+    const target = await User.findById(targetUserId).select("name college");
+    if (!target) return res.status(404).json({ message: "That profile no longer exists." });
+    if (target.college !== req.user.college) {
+      return res.status(403).json({ message: "You can only match within your own campus." });
+    }
+
+    const [myState, targetState] = await Promise.all([
+      getOrCreateState(fromUserId, slotId),
+      getOrCreateState(targetUserId, slotId),
+    ]);
 
     if (myState.state === "matched") {
-      return res.status(400).json({ message: "You already have a match for this slot! 🔒" });
+      return res.status(409).json({ message: "You already have a match for this slot.", state: "matched" });
     }
     if (myState.state === "in_community") {
-      return res.status(400).json({ message: "You're in a group meal. You cannot send likes. 👥" });
+      return res.status(409).json({ message: "You're seated at a group table for this slot.", state: "in_community" });
+    }
+    if (targetState.state === "matched" || targetState.state === "in_community") {
+      // Not an error the user caused — record the skip so they aren't shown again.
+      await Like.updateOne(
+        { fromUser: fromUserId, toUser: targetUserId, slotId },
+        { $setOnInsert: { fromUser: fromUserId, toUser: targetUserId, slotId, status: "skipped" } },
+        { upsert: true }
+      );
+      return res.status(409).json({
+        message: `${target.name} just got taken for this slot. Here's the next one.`,
+        taken: true,
+      });
     }
 
-    // 4. Check target's state — must be idle or liked
-    const targetState = await getOrCreateState(targetUserId, slotId);
-
-    if (targetState.state === "matched") {
-      return res.status(400).json({ message: "This user is already matched for this slot." });
+    // Record the like (idempotent).
+    const existing = await Like.findOne({ fromUser: fromUserId, toUser: targetUserId, slotId });
+    if (existing && existing.status === "skipped") {
+      return res.status(409).json({ message: "You already passed on this person for this slot." });
     }
-    if (targetState.state === "in_community") {
-      return res.status(400).json({ message: "This user is in a group meal for this slot." });
-    }
-
-    // 5. Record the like (idempotent — ignore duplicates)
-    const existingLike = await Like.findOne({
-      fromUser: fromUserId,
-      toUser: targetUserId,
-      slotId,
-    });
-    if (existingLike && existingLike.status !== "pending") {
-      return res.status(400).json({ message: "Already interacted with this user in this slot." });
-    }
-    if (!existingLike) {
+    if (!existing) {
       await Like.create({ fromUser: fromUserId, toUser: targetUserId, slotId, status: "pending" });
     }
 
-    // 6. Update sender's state to "liked" (if still idle)
+    // Move idle -> liked, but ONLY if we are still idle. The state we read a
+    // few lines ago can be stale: if the other person liked us back in the
+    // meantime, their request may already have claimed us as "matched", and an
+    // unconditional write here would silently undo their match.
     if (myState.state === "idle") {
-      await setState(fromUserId, slotId, "liked");
+      await UserSlotState.updateOne(
+        { userId: fromUserId, slotId, state: "idle" },
+        { $set: { state: "liked" } }
+      );
     }
 
-    // 7. Check for mutual like → trigger match
-    const reciprocalLike = await Like.findOne({
+    // Do they already like us back?
+    const reciprocal = await Like.findOne({
       fromUser: targetUserId,
       toUser: fromUserId,
       slotId,
       status: "pending",
     });
 
-    if (reciprocalLike) {
-      // 🎉 FINAL CHECK: Ensure neither user joined a community in the meantime
-      const myLatestState = await getOrCreateState(fromUserId, slotId);
-      const targetLatestState = await getOrCreateState(targetUserId, slotId);
-
-      if (myLatestState.state === "in_community" || targetLatestState.state === "in_community") {
-        return res.status(400).json({ 
-          message: "Conflict: One of you has already joined a group table for this slot. 👥" 
+    if (!reciprocal) {
+      // The other side may have matched us during this request. Report the
+      // truth rather than "waiting for them to like back".
+      const fresh = await UserSlotState.findOne({ userId: fromUserId, slotId });
+      if (fresh?.state === "matched" && fresh.matchId) {
+        return res.status(200).json({
+          isMatch: true,
+          matchId: fresh.matchId,
+          message: "It's a match!",
+          partner: { _id: target._id, name: target.name },
         });
       }
 
-      // 🎉 MUTUAL MATCH — create match and update both states
-      const newMatch = await Match.create({
-        users: [fromUserId, targetUserId],
-        slotId,
-        mealTime: pref.mealTime,
-        mealDate: pref.mealDate,
-        status: "active",
-      });
-
-      // Mark both likes as matched
-      await Like.updateMany(
-        {
-          slotId,
-          $or: [
-            { fromUser: fromUserId, toUser: targetUserId },
-            { fromUser: targetUserId, toUser: fromUserId },
-          ],
-        },
-        { $set: { status: "matched" } }
-      );
-
-      // 🔥 Update BOTH users' state → matched
-      await setState(fromUserId, slotId, "matched", { matchId: newMatch._id });
-      await setState(targetUserId, slotId, "matched", { matchId: newMatch._id });
-
+      // Self-heal: if a live match exists for us in this slot but our state row
+      // does not say so, the row lost a write somewhere. Trust the Match — it
+      // is the durable record — and put the state back.
+      const liveMatch = await Match.findOne({ users: fromUserId, slotId, status: "active" });
+      if (liveMatch) {
+        await UserSlotState.updateOne(
+          { userId: fromUserId, slotId },
+          { $set: { state: "matched", matchId: liveMatch._id, communityId: null } }
+        );
+        return res.status(200).json({
+          isMatch: true,
+          matchId: liveMatch._id,
+          message: "It's a match!",
+        });
+      }
       return res.status(201).json({
-        message: "🎉 It's a match!",
-        isMatch: true,
-        matchId: newMatch._id,
+        isMatch: false,
+        message: `Liked! We'll tell you the moment ${target.name} likes back.`,
       });
     }
 
-    return res.status(201).json({ message: "Liked! Waiting for them to like back.", isMatch: false });
-  } catch (error) {
-    console.error("[matchController] likeUser:", error);
-    res.status(500).json({ message: error.message });
+    // ── Atomic two-sided claim ────────────────────────────────────────────
+    const newMatch = await Match.create({
+      users: [fromUserId, targetUserId],
+      slotId,
+      mealTime: pref.mealTime,
+      mealDate: pref.mealDate,
+      status: "active",
+    });
+
+    const claimable = { state: { $in: ["idle", "liked"] } };
+
+    const claimA = await UserSlotState.findOneAndUpdate(
+      { userId: fromUserId, slotId, ...claimable },
+      { $set: { state: "matched", matchId: newMatch._id, communityId: null } },
+      { returnDocument: "after" }
+    );
+    if (!claimA) {
+      await Match.findByIdAndDelete(newMatch._id);
+      const now = await UserSlotState.findOne({ userId: fromUserId, slotId });
+      if (now?.state === "matched") {
+        return res.status(200).json({ isMatch: true, matchId: now.matchId, message: "It's a match!" });
+      }
+      return res.status(409).json({ message: "Something changed on your side — refreshing." });
+    }
+
+    const claimB = await UserSlotState.findOneAndUpdate(
+      { userId: targetUserId, slotId, ...claimable },
+      { $set: { state: "matched", matchId: newMatch._id, communityId: null } },
+      { returnDocument: "after" }
+    );
+    if (!claimB) {
+      // Roll back: the other side got taken in the milliseconds between calls.
+      await Match.findByIdAndDelete(newMatch._id);
+      await UserSlotState.updateOne(
+        { userId: fromUserId, slotId, matchId: newMatch._id },
+        { $set: { state: "liked", matchId: null } }
+      );
+      return res.status(409).json({
+        message: `${target.name} just matched with someone else. Keep going!`,
+        taken: true,
+      });
+    }
+
+    await Like.updateMany(
+      {
+        slotId,
+        $or: [
+          { fromUser: fromUserId, toUser: targetUserId },
+          { fromUser: targetUserId, toUser: fromUserId },
+        ],
+      },
+      { $set: { status: "matched" } }
+    );
+
+    // Clear every other pending like either side had — they're off the market.
+    await Like.updateMany(
+      {
+        slotId,
+        status: "pending",
+        $or: [
+          { fromUser: { $in: [fromUserId, targetUserId] } },
+          { toUser: { $in: [fromUserId, targetUserId] } },
+        ],
+      },
+      { $set: { status: "skipped" } }
+    );
+
+    await Message.create({
+      threadType: "match",
+      threadId: newMatch._id,
+      sender: fromUserId,
+      kind: "system",
+      text: `You matched for ${pref.mealTime}. Say hi and decide where to meet!`,
+    });
+
+    return res.status(201).json({
+      isMatch: true,
+      matchId: newMatch._id,
+      message: "It's a match!",
+      partner: { _id: target._id, name: target.name },
+    });
+  } catch (err) {
+    if (err?.code === 11000) {
+      return res.status(409).json({ message: "You already responded to this person." });
+    }
+    console.error("[matchController] likeUser:", err);
+    return res.status(500).json({ message: "Couldn't send that like. Try again." });
   }
 };
 
-// ─── SKIP USER ────────────────────────────────────────────────────────────────
+// ─── SKIP ───────────────────────────────────────────────────────────────────
 
-/**
- * POST /api/match/skip  { targetUserId }
- * Skip a user in the current slot (they won't appear again).
- */
 const skipUser = async (req, res) => {
   try {
     const { targetUserId } = req.body;
-    const fromUserId = req.user._id;
-
-    if (!targetUserId) {
-      return res.status(400).json({ message: "targetUserId is required" });
+    if (!isId(targetUserId)) {
+      return res.status(400).json({ message: "A valid targetUserId is required." });
     }
 
-    const { slotId, error } = await resolveSlot(fromUserId);
-    if (error) return res.status(400).json({ message: error });
+    const { slotId, error, code } = await resolveSlot(req.user._id);
+    if (error) return res.status(code || 400).json({ message: error });
 
     if (!isSlotActive(slotId)) {
-      return res.status(400).json({ slotStatus: "closed", message: "This slot has ended." });
+      return res.status(409).json({ slotStatus: "closed", message: "This slot has closed." });
     }
 
-    // Idempotent skip — use findOneAndUpdate to avoid duplicate key errors
     await Like.findOneAndUpdate(
-      { fromUser: fromUserId, toUser: targetUserId, slotId },
-      { $setOnInsert: { fromUser: fromUserId, toUser: targetUserId, slotId, status: "skipped" } },
+      { fromUser: req.user._id, toUser: targetUserId, slotId },
+      {
+        $setOnInsert: {
+          fromUser: req.user._id,
+          toUser: targetUserId,
+          slotId,
+          status: "skipped",
+        },
+      },
       { upsert: true }
     );
 
-    return res.status(201).json({ message: "Skipped." });
-  } catch (error) {
-    console.error("[matchController] skipUser:", error);
-    res.status(500).json({ message: error.message });
+    return res.status(200).json({ message: "Skipped." });
+  } catch (err) {
+    if (err?.code === 11000) return res.status(200).json({ message: "Skipped." });
+    console.error("[matchController] skipUser:", err);
+    return res.status(500).json({ message: "Couldn't skip. Try again." });
   }
 };
 
-// ─── GET LIKES RECEIVED ───────────────────────────────────────────────────────
+// ─── UNDO LAST SKIP ─────────────────────────────────────────────────────────
 
 /**
- * GET /api/match/likes-received
- * Returns pending incoming likes for the user's current slot.
+ * POST /api/match/undo
+ * Everyone mis-taps. Removes the most recent skip in this slot so the profile
+ * returns to the deck. Only skips can be undone — a like is a commitment.
  */
+const undoLastSkip = async (req, res) => {
+  try {
+    const { slotId, error, code } = await resolveSlot(req.user._id);
+    if (error) return res.status(code || 400).json({ message: error });
+
+    const last = await Like.findOneAndDelete(
+      { fromUser: req.user._id, slotId, status: "skipped" },
+      { sort: { createdAt: -1 } }
+    );
+    if (!last) return res.status(404).json({ message: "Nothing to undo." });
+
+    return res.json({ message: "Brought them back.", restoredUserId: last.toUser });
+  } catch (err) {
+    console.error("[matchController] undoLastSkip:", err);
+    return res.status(500).json({ message: "Couldn't undo." });
+  }
+};
+
+// ─── LIKES RECEIVED ─────────────────────────────────────────────────────────
+
 const getLikesReceived = async (req, res) => {
   try {
-    const currentUser = req.user;
+    const { slotId, pref, error, code } = await resolveSlot(req.user._id);
+    if (error) return res.status(code || 400).json({ likes: [], message: error });
 
-    const { slotId, error } = await resolveSlot(currentUser._id);
-    if (error) return res.json({ likes: [], message: error });
+    const state = await getOrCreateState(req.user._id, slotId);
 
-    const myState = await getOrCreateState(currentUser._id, slotId);
-
-    if (myState.state === "matched") {
-      return res.json({ likes: [], isLocked: true, lockType: 'match', message: "You already have a 1-1 match for this slot! 🔒" });
-    }
-    if (myState.state === "in_community") {
-      return res.json({ likes: [], isLocked: true, lockType: 'community', message: "You're already in a group meal for this slot! 👥" });
-    }
-
-    // 🆕 LOCK IF IN GROUP MODE: If user's current preference is for 3-4 members, block 1-1 matching.
-    // Query directly to be 100% fresh
-    const activePref = await Preference.findOne({ user: currentUser._id });
-    if (activePref && Number(activePref.groupSize) >= 3) {
-      return res.json({ 
-        likes: [], 
-        isLocked: true, 
-        lockType: 'group_mode', 
-        message: "You're in Group Mode! Individual matching is disabled. Switch to Solo to see likes. 🍱" 
+    if (state.state === "matched" || state.state === "in_community") {
+      return res.json({
+        likes: [],
+        isLocked: true,
+        lockType: state.state === "matched" ? "match" : "community",
+        mealTime: pref.mealTime,
+        mealDate: pref.mealDate,
+        message:
+          state.state === "matched"
+            ? "You already have a match for this slot."
+            : "You're seated at a group table for this slot.",
       });
     }
 
-    const likes = await Like.find({
-      toUser: currentUser._id,
-      slotId,
-      status: "pending",
-    }).populate("fromUser", "name birthday college bio interests profilePic");
+    const likes = await Like.find({ toUser: req.user._id, slotId, status: "pending" })
+      .populate("fromUser", User.CARD_FIELDS)
+      .lean();
 
-    const usersWhoLiked = likes
-      .map((l) => {
-        if (!l.fromUser) return null;
-        // Access age virtual explicitly to ensure it pops up in the plain object
-        const age = l.fromUser.age; 
-        return {
-          _id: l.fromUser._id,
-          name: l.fromUser.name,
-          age: age,
-          birthday: l.fromUser.birthday,
-          college: l.fromUser.college,
-          bio: l.fromUser.bio,
-          interests: l.fromUser.interests,
-          profilePic: l.fromUser.profilePic,
+    return res.json({
+      likes: likes
+        .filter((l) => l.fromUser)
+        .map((l) => ({
           likeId: l._id,
-        };
-      })
-      .filter(Boolean);
-
-    return res.json({ 
-      likes: usersWhoLiked,
-      mealTime: activePref?.mealTime || 'Current',
-      mealDate: activePref?.mealDate || 'Slot'
+          ...l.fromUser,
+          age: calculateAge(l.fromUser.birthday),
+        })),
+      mealTime: pref.mealTime,
+      mealDate: pref.mealDate,
     });
-  } catch (error) {
-    console.error("[matchController] getLikesReceived:", error);
-    res.status(500).json({ message: error.message });
+  } catch (err) {
+    console.error("[matchController] getLikesReceived:", err);
+    return res.status(500).json({ message: "Couldn't load your likes." });
   }
 };
 
-// ─── IGNORE LIKE ──────────────────────────────────────────────────────────────
+// ─── IGNORE A LIKE ──────────────────────────────────────────────────────────
 
-/**
- * POST /api/match/ignore  { likeId }
- * Dismiss an incoming like without matching.
- */
 const ignoreLike = async (req, res) => {
   try {
     const { likeId } = req.body;
-    await Like.findByIdAndUpdate(likeId, { status: "skipped" });
-    return res.json({ message: "Like ignored." });
-  } catch (error) {
-    console.error("[matchController] ignoreLike:", error);
-    res.status(500).json({ message: error.message });
+    if (!isId(likeId)) return res.status(400).json({ message: "A valid likeId is required." });
+
+    // Ownership check — the old build let any logged-in user dismiss any like.
+    const like = await Like.findOne({ _id: likeId, toUser: req.user._id });
+    if (!like) return res.status(404).json({ message: "That like isn't yours to dismiss." });
+
+    like.status = "skipped";
+    await like.save();
+    return res.json({ message: "Dismissed." });
+  } catch (err) {
+    console.error("[matchController] ignoreLike:", err);
+    return res.status(500).json({ message: "Couldn't dismiss that like." });
   }
 };
 
-/**
- * GET /api/match/list
- * Returns all active/completed 1-1 matches for the user.
- */
+// ─── MATCH LIST ─────────────────────────────────────────────────────────────
+
 const getMatches = async (req, res) => {
   try {
-    const currentUser = req.user;
+    const me = req.user._id;
+    const matches = await Match.find({ users: me })
+      .populate("users", User.CARD_FIELDS)
+      .sort({ createdAt: -1 })
+      .limit(100)
+      .lean();
 
-    const matches = await Match.find({
-      users: currentUser._id,
-    }).populate("users", "name birthday college bio interests profilePic prompts");
+    const ids = matches.map((m) => m._id);
+    const unreadRows = await Message.aggregate([
+      {
+        $match: {
+          threadType: "match",
+          threadId: { $in: ids },
+          sender: { $ne: new mongoose.Types.ObjectId(me) },
+          readBy: { $ne: new mongoose.Types.ObjectId(me) },
+        },
+      },
+      { $group: { _id: "$threadId", n: { $sum: 1 } } },
+    ]);
+    const unread = new Map(unreadRows.map((r) => [r._id.toString(), r.n]));
 
-    const soloMatches = matches
-      .map((match) => {
-        const partner = match.users.find(
-          (u) => u._id.toString() !== currentUser._id.toString()
-        );
+    const list = matches
+      .map((m) => {
+        const partner = m.users.find((u) => u._id.toString() !== me.toString());
         if (!partner) return null;
         return {
-          _id: match._id,
+          _id: m._id,
           type: "solo",
-          slotId: match.slotId,
-          mealTime: match.mealTime,
-          mealDate: match.mealDate,
-          status: match.status,
-          createdAt: match.createdAt,
-          user: partner,
+          slotId: m.slotId,
+          mealTime: m.mealTime,
+          mealDate: m.mealDate,
+          status: m.status,
+          createdAt: m.createdAt,
+          lastMessageAt: m.lastMessageAt,
+          lastMessagePreview: m.lastMessagePreview,
+          unread: unread.get(m._id.toString()) || 0,
+          user: { ...partner, age: calculateAge(partner.birthday) },
         };
       })
       .filter(Boolean);
 
-    // Sort by date
-    const sorted = soloMatches.sort(
-      (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
-    );
-
-    const { pref } = await resolveSlot(currentUser._id);
-    return res.json({ 
-      matches: sorted,
-      mealTime: pref?.mealTime || 'Current',
-      mealDate: pref?.mealDate || 'Slot'
+    const { pref } = await resolveSlot(me);
+    return res.json({
+      matches: list,
+      mealTime: pref?.mealTime || null,
+      mealDate: pref?.mealDate || null,
     });
-  } catch (error) {
-    console.error("[matchController] getMatches:", error);
-    res.status(500).json({ message: error.message });
+  } catch (err) {
+    console.error("[matchController] getMatches:", err);
+    return res.status(500).json({ message: "Couldn't load your matches." });
   }
 };
 
-// ─── UNMATCH ──────────────────────────────────────────────────────────────────
+// ─── UNMATCH ────────────────────────────────────────────────────────────────
 
-/**
- * POST /api/match/unmatch  { matchId }
- * Dissolve a match and reset both users' states to idle for that slot.
- */
 const unmatchUser = async (req, res) => {
   try {
     const { matchId } = req.body;
-    const currentUser = req.user;
+    if (!isId(matchId)) return res.status(400).json({ message: "A valid matchId is required." });
 
-    const match = await Match.findById(matchId);
+    // Ownership check — previously any authenticated user could dissolve any match.
+    const match = await Match.findOne({ _id: matchId, users: req.user._id });
     if (!match) return res.status(404).json({ message: "Match not found." });
 
-    // Delete the match
-    await Match.findByIdAndDelete(matchId);
-
-    // Delete associated likes so they can rematch later
     const [u1, u2] = match.users;
+
+    await Match.findByIdAndDelete(matchId);
+    await Message.deleteMany({ threadType: "match", threadId: matchId });
     await Like.deleteMany({
       slotId: match.slotId,
       $or: [
@@ -503,54 +455,47 @@ const unmatchUser = async (req, res) => {
         { fromUser: u2, toUser: u1 },
       ],
     });
-
-    // 🔥 Reset BOTH users' states → idle
     await UserSlotState.updateMany(
-      { matchId, slotId: match.slotId },
+      { matchId: match._id },
       { $set: { state: "idle", matchId: null } }
     );
 
-    return res.json({ message: "Unmatched successfully." });
-  } catch (error) {
-    console.error("[matchController] unmatchUser:", error);
-    res.status(500).json({ message: error.message });
+    return res.json({ message: "Unmatched. You're back in the deck." });
+  } catch (err) {
+    console.error("[matchController] unmatchUser:", err);
+    return res.status(500).json({ message: "Couldn't unmatch." });
   }
 };
 
-// ─── COMPLETE MATCH ───────────────────────────────────────────────────────────
+// ─── COMPLETE ───────────────────────────────────────────────────────────────
 
-/**
- * POST /api/match/complete  { matchId }
- * Mark a meal as completed and reset both users' states.
- */
 const completeMatch = async (req, res) => {
   try {
     const { matchId } = req.body;
+    if (!isId(matchId)) return res.status(400).json({ message: "A valid matchId is required." });
 
-    const match = await Match.findById(matchId);
+    const match = await Match.findOne({ _id: matchId, users: req.user._id });
     if (!match) return res.status(404).json({ message: "Match not found." });
 
-    // Mark match as completed
     match.status = "completed";
     await match.save();
 
-    // 🔥 Reset BOTH users' states → idle
     await UserSlotState.updateMany(
-      { matchId, slotId: match.slotId },
+      { matchId: match._id },
       { $set: { state: "idle", matchId: null } }
     );
 
-    return res.json({ message: "🎉 Hope you had a great meal! Match history saved." });
-  } catch (error) {
-    console.error("[matchController] completeMatch:", error);
-    res.status(500).json({ message: error.message });
+    return res.json({ message: "Hope the meal was good. Saved to your history." });
+  } catch (err) {
+    console.error("[matchController] completeMatch:", err);
+    return res.status(500).json({ message: "Couldn't close out that match." });
   }
 };
 
 module.exports = {
-  getCandidates,
   likeUser,
   skipUser,
+  undoLastSkip,
   getMatches,
   getLikesReceived,
   ignoreLike,

@@ -1,132 +1,95 @@
 /**
- * cleanup.js — Auto-Expiry System for Slot-Based State Architecture.
+ * cleanup.js — auto-expiry for slot-scoped state.
  *
- * Runs every 5 minutes via setInterval in server.js.
+ * Runs every 5 minutes. For every slot whose cut-off has passed:
+ *   1. active Matches      → marked expired, both states reset to idle
+ *   2. Communities         → deleted, all member states reset to idle
+ *   3. pending Likes       → deleted (they can never resolve now)
+ *   4. leftover "liked"    → reset to idle
+ *   5. chat threads        → deleted with their match/table
  *
- * What it does on each run:
- *   1. Find all slots that have expired (past their cut-off hour)
- *   2. Delete active Matches for those slots → reset UserSlotState → idle
- *   3. Delete Communities for those slots → reset UserSlotState → idle
- *   4. Delete pending/unresolved Likes for those slots (no longer relevant)
- *
- * This guarantees state returns to idle automatically, even when users are offline.
- * Cross-slot safety: only expired slots are touched.
+ * Dates are computed in IST. The previous version used
+ * `new Date().toISOString()` (UTC), so between 00:00 and 05:30 IST it looked at
+ * the wrong day and left yesterday's matches hanging.
  */
 
 const Match = require("../models/Match");
 const Community = require("../models/Community");
 const Like = require("../models/Like");
+const Message = require("../models/Message");
 const UserSlotState = require("../models/UserSlotState");
-const { getSlotExpiry, MEAL_TYPES } = require("./slotUtils");
+const { getSlotExpiry, MEAL_TYPES, todayStr, shiftDateStr } = require("./slotUtils");
 
-/**
- * Build a list of all slot IDs (date_mealType) for the past 3 days.
- * This covers any delayed cleanup runs without being too broad.
- */
+/** Slots from the last 3 IST days whose cut-off has passed. */
 const buildExpiredSlotIds = () => {
-  const now = new Date();
-  const expiredSlots = [];
+  const now = Date.now();
+  const today = todayStr();
+  const out = [];
 
-  // Check today and the past 2 days
-  for (let dayOffset = 0; dayOffset <= 2; dayOffset++) {
-    const d = new Date(now);
-    d.setDate(d.getDate() - dayOffset);
-    const dateStr = d.toISOString().split("T")[0];
-
+  for (let offset = 0; offset <= 2; offset++) {
+    const dateStr = shiftDateStr(today, -offset);
     for (const mealType of MEAL_TYPES) {
       const slotId = `${dateStr}_${mealType}`;
-      const expiry = getSlotExpiry(slotId);
-      if (now >= expiry) {
-        expiredSlots.push(slotId);
-      }
+      if (now >= getSlotExpiry(slotId).getTime()) out.push(slotId);
     }
   }
-
-  return expiredSlots;
+  return out;
 };
 
-/**
- * Main cleanup runner — called every 5 minutes.
- */
 const runAutoCleanup = async () => {
-  try {
-    const expiredSlotIds = buildExpiredSlotIds();
+  const expired = buildExpiredSlotIds();
+  if (expired.length === 0) return { matches: 0, communities: 0, likes: 0 };
 
-    if (expiredSlotIds.length === 0) {
-      console.log("[CLEANUP] No expired slots to process.");
-      return;
-    }
+  const summary = { matches: 0, communities: 0, likes: 0 };
 
-    console.log(`[CLEANUP] Processing ${expiredSlotIds.length} expired slots...`);
-
-    // ── 1. DISSOLVE ACTIVE MATCHES ─────────────────────────────────────────
-    const expiredMatches = await Match.find({
-      slotId: { $in: expiredSlotIds },
-      status: "active",
-    });
-
-    if (expiredMatches.length > 0) {
-      const expiredMatchIds = expiredMatches.map((m) => m._id);
-
-      // Mark as expired (keep for history)
-      await Match.updateMany(
-        { _id: { $in: expiredMatchIds } },
-        { $set: { status: "expired" } }
-      );
-
-      // 🔥 Reset all UserSlotState records pointing to these matches → idle
-      await UserSlotState.updateMany(
-        { matchId: { $in: expiredMatchIds } },
-        { $set: { state: "idle", matchId: null } }
-      );
-
-      console.log(`[CLEANUP] Expired ${expiredMatches.length} match(es) and reset associated states.`);
-    }
-
-    // ── 2. DISSOLVE COMMUNITIES ────────────────────────────────────────────
-    const expiredCommunities = await Community.find({
-      slotId: { $in: expiredSlotIds },
-    });
-
-    if (expiredCommunities.length > 0) {
-      const expiredCommunityIds = expiredCommunities.map((c) => c._id);
-
-      // 🔥 Reset all UserSlotState records pointing to these communities → idle
-      await UserSlotState.updateMany(
-        { communityId: { $in: expiredCommunityIds } },
-        { $set: { state: "idle", communityId: null } }
-      );
-
-      // Delete the communities (ephemeral — no history needed)
-      await Community.deleteMany({ _id: { $in: expiredCommunityIds } });
-
-      console.log(`[CLEANUP] Dissolved ${expiredCommunities.length} community(ies) and reset associated states.`);
-    }
-
-    // ── 3. PURGE PENDING LIKES FOR EXPIRED SLOTS ──────────────────────────
-    const deletedLikes = await Like.deleteMany({
-      slotId: { $in: expiredSlotIds },
-      status: "pending", // keep "matched" and "skipped" for history
-    });
-
-    // Also reset any "liked" states in expired slots to idle
-    // (these have no associated match/community, cleanup above covers the rest)
+  // 1. Matches
+  const staleMatches = await Match.find({ slotId: { $in: expired }, status: "active" })
+    .select("_id")
+    .lean();
+  if (staleMatches.length) {
+    const ids = staleMatches.map((m) => m._id);
+    await Match.updateMany({ _id: { $in: ids } }, { $set: { status: "expired" } });
     await UserSlotState.updateMany(
-      {
-        slotId: { $in: expiredSlotIds },
-        state: "liked",
-      },
-      { $set: { state: "idle" } }
+      { matchId: { $in: ids } },
+      { $set: { state: "idle", matchId: null } }
     );
-
-    if (deletedLikes.deletedCount > 0) {
-      console.log(`[CLEANUP] Purged ${deletedLikes.deletedCount} pending like(s) from expired slots.`);
-    }
-
-    console.log("[CLEANUP] Cleanup cycle complete. ✅");
-  } catch (error) {
-    console.error("[CLEANUP ERROR]:", error);
+    await Message.deleteMany({ threadType: "match", threadId: { $in: ids } });
+    summary.matches = ids.length;
   }
+
+  // 2. Communities
+  const staleTables = await Community.find({ slotId: { $in: expired } }).select("_id").lean();
+  if (staleTables.length) {
+    const ids = staleTables.map((c) => c._id);
+    await UserSlotState.updateMany(
+      { communityId: { $in: ids } },
+      { $set: { state: "idle", communityId: null } }
+    );
+    await Message.deleteMany({ threadType: "community", threadId: { $in: ids } });
+    await Community.deleteMany({ _id: { $in: ids } });
+    summary.communities = ids.length;
+  }
+
+  // 3. Unresolved likes
+  const removed = await Like.deleteMany({ slotId: { $in: expired }, status: "pending" });
+  summary.likes = removed.deletedCount || 0;
+
+  // 4. Anything still sitting in "liked" for a dead slot
+  await UserSlotState.updateMany(
+    { slotId: { $in: expired }, state: "liked" },
+    { $set: { state: "idle" } }
+  );
+
+  // 5. Drop state rows older than a week — they have no further use.
+  const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  await UserSlotState.deleteMany({ updatedAt: { $lt: weekAgo }, state: "idle" });
+
+  if (summary.matches || summary.communities || summary.likes) {
+    console.log(
+      `[cleanup] expired ${summary.matches} match(es), ${summary.communities} table(s), ${summary.likes} like(s)`
+    );
+  }
+  return summary;
 };
 
-module.exports = { runAutoCleanup };
+module.exports = { runAutoCleanup, buildExpiredSlotIds };

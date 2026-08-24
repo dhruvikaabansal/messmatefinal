@@ -1,330 +1,339 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import api from '../services/api';
-import { getProfilePic } from '../utils/imgUtils';
-import './Discover.css';
+import api, { errorCode, errorMessage } from '../lib/api';
+import { friendlyDate, mealLabel } from '../lib/format';
+import { useToast } from '../lib/toast';
+import { useSession } from '../store/SessionContext';
+import SlotSwitcher from '../components/SlotSwitcher';
+import PersonCard from '../components/PersonCard';
+import TableCard from '../components/TableCard';
+import CreateTable from '../components/CreateTable';
+import { Avatar, CardSkeleton, EmptyState } from '../components/ui';
 
 /**
- * Discover.jsx — Slot-State-First architecture
+ * Discover — the whole app in one screen.
  *
- * This component calls GET /api/slot/status (the unified endpoint) once
- * and renders ENTIRELY based on the returned `state` field.
- *
- * State → UI mapping:
- *   matched      → show locked match screen (chat button)
- *   in_community → show redirect to community
- *   idle/liked   → show discovery swipe cards
- *   closed       → show slot-closed banner
+ * Renders entirely from GET /api/slot/status. Whatever the server says the
+ * user's state is, that's what shows: a deck, a locked match, or a table. No
+ * page can disagree with another because there is only one source.
  */
 const Discover = () => {
-    const navigate = useNavigate();
-    const [slotData, setSlotData] = useState(null); // full /api/slot/status response
-    const [loading, setLoading] = useState(true);
-    const [currentIndex, setCurrentIndex] = useState(0);
-    const [actionFeedback, setActionFeedback] = useState(null);
+  const navigate = useNavigate();
+  const toast = useToast();
+  const { profileComplete, isReady, refresh } = useSession();
 
-    useEffect(() => {
-        fetchSlotStatus();
-    }, []);
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [index, setIndex] = useState(0);
+  const [busy, setBusy] = useState(null);
+  const [skipped, setSkipped] = useState(0);
+  const [creating, setCreating] = useState(false);
 
-    const fetchSlotStatus = async () => {
-        try {
-            setLoading(true);
-            const res = await api.get(`/slot/status?t=${Date.now()}`);
-            setSlotData(res.data);
-            setCurrentIndex(0);
-            setLoading(false);
-        } catch (err) {
-            console.error('[Discover] fetchSlotStatus error:', err);
-            setLoading(false);
-        }
-    };
-
-    const handleAction = async (action) => {
-        if (!slotData || currentIndex >= slotData.availableUsers.length) return;
-        const user = slotData.availableUsers[currentIndex];
-
-        setActionFeedback(action);
-        try {
-            if (action === 'like') {
-                const res = await api.post('/match/like', { targetUserId: user._id });
-                if (res.data?.isMatch) {
-                    // Re-fetch slot status — state is now "matched"
-                    await fetchSlotStatus();
-                    setActionFeedback(null);
-                    return;
-                }
-            } else {
-                await api.post('/match/skip', { targetUserId: user._id });
-            }
-            setTimeout(() => {
-                setCurrentIndex(prev => prev + 1);
-                setActionFeedback(null);
-                window.scrollTo(0, 0);
-            }, 600);
-        } catch (err) {
-            console.error('[Discover] action error:', err);
-            setActionFeedback(null);
-        }
-    };
-
-    const handleUnmatch = async () => {
-        if (!window.confirm('Are you sure you want to unmatch?')) return;
-        try {
-            await api.post('/match/unmatch', { matchId: slotData.matchData._id });
-            fetchSlotStatus();
-        } catch (err) { alert('Error unmatching.'); }
-    };
-
-    const handleComplete = async () => {
-        try {
-            await api.post('/match/complete', { matchId: slotData.matchData._id });
-            fetchSlotStatus();
-        } catch (err) { alert('Error completing match.'); }
-    };
-
-    // ── LOADING ──────────────────────────────────────────────────────────────
-    if (loading) return <div className="container loader-container">Finding your MessMate... 🍽️</div>;
-
-    if (!slotData) return <div className="container loader-container">Something went wrong. Try refreshing.</div>;
-
-    const { state, slotStatus, availableUsers, matchData, communityData } = slotData;
-
-    // ── SLOT CLOSED ───────────────────────────────────────────────────────────
-    if (slotStatus === 'closed') {
-        return (
-            <div className="container discover-page-v3">
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="neo-card active-match-card"
-                >
-                    <div className="match-header">
-                        <h1>⏰ Meal Slot Closed</h1>
-                        <p>This meal slot has ended. Update your preferences to keep discovering!</p>
-                    </div>
-                    <div className="match-actions-v3">
-                        <button className="neo-btn neo-btn-primary w-full" onClick={() => navigate('/preferences?mode=edit')}>
-                            Update My Preferences →
-                        </button>
-                    </div>
-                </motion.div>
-            </div>
-        );
+  const load = useCallback(async ({ quiet = false } = {}) => {
+    if (!quiet) setLoading(true);
+    try {
+      const res = await api.get('/slot/status');
+      setData(res.data);
+      setIndex(0);
+    } catch (err) {
+      if (errorCode(err) !== 'PROFILE_INCOMPLETE') toast.error(errorMessage(err));
+    } finally {
+      setLoading(false);
     }
+  }, [toast]);
 
-    // ── STATE: COMMUNITY MODE GUARD (Group Size >= 3) ────────────────────────
-    if (slotData.groupSize >= 3) {
-        return (
-            <div className="container discover-page-v3">
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="neo-card active-match-card community-mode-guard"
-                    style={{ textAlign: 'center', border: '3px solid var(--secondary)' }}
-                >
-                    <div className="match-header">
-                        <div style={{ fontSize: '4rem', marginBottom: '1rem' }}>👥</div>
-                        <h1>Community Mode Active</h1>
-                        <p style={{ fontSize: '1.1rem' }}>
-                            You're currently looking for <strong>group meals ({slotData.groupSize} people)</strong>.<br/>
-                            1-on-1 matching is only available in Solo Mode.
-                        </p>
-                    </div>
-                    <div className="match-actions-v3">
-                        <button className="neo-btn neo-btn-primary w-full" onClick={() => navigate('/preferences?mode=edit')}>
-                            Switch to Solo Mode (2) →
-                        </button>
-                        <button className="neo-btn neo-btn-outline w-full mt-2" onClick={() => navigate('/community')}>
-                            Go to Communities 👥
-                        </button>
-                    </div>
-                </motion.div>
-            </div>
-        );
+  useEffect(() => {
+    if (isReady && !profileComplete) navigate('/onboarding', { replace: true });
+  }, [isReady, profileComplete, navigate]);
+
+  useEffect(() => {
+    if (profileComplete) load();
+  }, [profileComplete, load]);
+
+  const feed = data?.feed || [];
+  const current = feed[index];
+
+  const advance = useCallback(() => {
+    setIndex((i) => i + 1);
+    setBusy(null);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, []);
+
+  const like = async (person) => {
+    setBusy('like');
+    try {
+      const res = await api.post('/match/like', { targetUserId: person._id });
+      if (res.data.isMatch) {
+        toast.success(`It's a match with ${person.name}! 🎉`);
+        await load({ quiet: true });
+        setBusy(null);
+        return;
+      }
+      toast.toast(`Invite sent to ${person.name}`);
+      advance();
+    } catch (err) {
+      const msg = errorMessage(err);
+      toast.error(msg);
+      // "Taken" and "slot closed" both mean the deck we're holding is stale.
+      if (err.response?.data?.taken) advance();
+      else if (err.response?.status === 409) await load({ quiet: true });
+      else setBusy(null);
     }
+  };
 
-    // ── STATE: MATCHED ────────────────────────────────────────────────────────
-    if (state === 'matched' && matchData) {
-        const partner = matchData.user;
-        return (
-            <div className="container discover-page-v3 match-locked">
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="neo-card active-match-card"
-                >
-                    <div className="match-header">
-                        <h1>🎉 You're Matched!</h1>
-                        <p>You have an active meal with {partner?.name}.</p>
-                    </div>
-                    {partner && (
-                        <div className="match-profile-preview">
-                            <img
-                                src={getProfilePic(partner.profilePic, partner.name)}
-                                alt={partner.name}
-                            />
-                            <div className="preview-info">
-                                <h3>{partner.name}, {partner.age}</h3>
-                                <p>{partner.college}</p>
-                                <span className="match-tag tag-primary">Matching for {matchData.mealTime}</span>
-                            </div>
-                        </div>
-                    )}
-                    <div className="match-actions-v3">
-                        <button className="neo-btn neo-btn-primary w-full" onClick={() => navigate('/matches')}>
-                            💬 Chat Now
-                        </button>
-                        <button className="neo-btn neo-btn-outline w-full mt-2" onClick={handleComplete}>
-                            ✅ Meal Successful!
-                        </button>
-                        <button className="neo-btn neo-btn-outline w-full mt-2" onClick={handleUnmatch}>
-                            💔 Unmatch
-                        </button>
-                    </div>
-                    <p className="match-footer-hint">Complete or unmatch to discover again.</p>
-                </motion.div>
-            </div>
-        );
+  const skip = async (person) => {
+    setBusy('skip');
+    try {
+      await api.post('/match/skip', { targetUserId: person._id });
+      setSkipped((n) => n + 1);
+      advance();
+    } catch (err) {
+      toast.error(errorMessage(err));
+      setBusy(null);
     }
+  };
 
-    // ── STATE: IN_COMMUNITY ───────────────────────────────────────────────────
-    if (state === 'in_community') {
-        return (
-            <div className="container discover-page-v3 match-locked">
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="neo-card active-match-card community-lock"
-                >
-                    <div className="match-header">
-                        <h1>👥 Group Meal Active!</h1>
-                        <p>You're part of: <strong>{communityData?.name || 'a group meal'}</strong></p>
-                    </div>
-                    <div className="match-profile-preview community-preview">
-                        <div className="preview-info">
-                            <span className="match-tag tag-secondary">Meal: {communityData?.mealTime}</span>
-                            <span className="match-tag tag-primary">Date: {communityData?.mealDate}</span>
-                        </div>
-                    </div>
-                    <div className="match-actions-v3">
-                        <button className="neo-btn neo-btn-primary w-full" onClick={() => navigate('/community')}>
-                            📂 Go to My Group
-                        </button>
-                    </div>
-                    <p className="match-footer-hint">Leave your group to discover 1-on-1 matches.</p>
-                </motion.div>
-            </div>
-        );
+  const undo = async () => {
+    try {
+      await api.post('/match/undo');
+      setSkipped((n) => Math.max(0, n - 1));
+      toast.toast('Brought them back');
+      await load({ quiet: true });
+    } catch (err) {
+      toast.error(errorMessage(err));
     }
+  };
 
-    // ── STATE: IDLE / LIKED — DISCOVERY MODE ──────────────────────────────────
-    const currentUser = availableUsers[currentIndex];
+  const joinTable = async (table) => {
+    setBusy('join');
+    try {
+      await api.post('/community/join', { communityId: table._id });
+      toast.success(`You're in — ${table.name}`);
+      await load({ quiet: true });
+      setBusy(null);
+    } catch (err) {
+      toast.error(errorMessage(err));
+      await load({ quiet: true });
+      setBusy(null);
+    }
+  };
 
+  const leaveMatch = async (action) => {
+    const isUnmatch = action === 'unmatch';
+    const ok = await toast.confirm({
+      title: isUnmatch ? 'Unmatch?' : 'Mark this meal done?',
+      body: isUnmatch
+        ? 'You will both go back into the deck for this slot, and the chat is deleted.'
+        : 'This closes the match and saves it to your history.',
+      confirmLabel: isUnmatch ? 'Unmatch' : 'Meal done',
+      tone: isUnmatch ? 'danger' : 'primary',
+    });
+    if (!ok) return;
+    try {
+      await api.post(`/match/${isUnmatch ? 'unmatch' : 'complete'}`, { matchId: data.matchData._id });
+      await load({ quiet: true });
+    } catch (err) {
+      toast.error(errorMessage(err));
+    }
+  };
+
+  const leaveTable = async () => {
+    const ok = await toast.confirm({
+      title: 'Leave this table?',
+      body: 'Your seat opens up for someone else.',
+      confirmLabel: 'Leave',
+    });
+    if (!ok) return;
+    try {
+      await api.post('/community/leave', { communityId: data.communityData._id });
+      await load({ quiet: true });
+    } catch (err) {
+      toast.error(errorMessage(err));
+    }
+  };
+
+  const header = useMemo(
+    () => <SlotSwitcher slot={data} slots={data?.slots} onChanged={() => load({ quiet: true })} />,
+    [data, load]
+  );
+
+  if (loading) {
     return (
-        <div className="container discover-page-v3">
-            <div className="community-header-premium" style={{ marginBottom: '2rem' }}>
-                <div className="header-main-info">
-                    <h1>Discover 👋</h1>
-                    <div className="community-context-bar">
-                        <span className="slot-context-pill" style={{ background: 'var(--accent)', padding: '0.4rem 0.8rem', border: '3px solid #000', fontWeight: '800', marginRight: '0.5rem' }}>
-                            <span className="capitalize">{slotData.mealTime}</span> · {slotData.mealDate}
-                        </span>
-                        <button className="neo-btn change-slot-btn-minimal" onClick={() => navigate('/preferences?mode=edit')} style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}>
-                             ⚙️ Change
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <AnimatePresence mode="wait">
-                {!currentUser ? (
-                    <motion.div
-                        key="empty"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        className="neo-card empty-state-v3"
-                    >
-                        <h2>That's everyone for now! 🍱</h2>
-                        <p>Try refreshing or expanding your preferences.</p>
-                        <div className="mt-2">
-                            <button className="neo-btn" onClick={() => navigate('/preferences?mode=edit')}>
-                                Reset My Prefs
-                            </button>
-                        </div>
-                    </motion.div>
-                ) : (
-                    <motion.div
-                        key={currentUser._id}
-                        initial={{ opacity: 0, scale: 0.95 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        exit={{ opacity: 0, x: actionFeedback === 'like' ? 100 : -100 }}
-                        className="profile-feed-item"
-                    >
-                        {/* Hero Image */}
-                        <section className="profile-hero neo-card">
-                            <div className="image-wrapper">
-                                <img
-                                    src={getProfilePic(currentUser.profilePic, currentUser.name)}
-                                    alt={currentUser.name}
-                                />
-                                <div className="hero-overlay">
-                                    <h1>{currentUser.name}, {currentUser.age}</h1>
-                                    <p className="college-tag">{currentUser.college}</p>
-                                </div>
-                            </div>
-                        </section>
-
-                        {/* Prompt 1 */}
-                        {currentUser.prompts?.[0] && (
-                            <section className="profile-prompt neo-card">
-                                <span className="prompt-q">{currentUser.prompts[0].question}</span>
-                                <h2 className="prompt-a">{currentUser.prompts[0].answer}</h2>
-                            </section>
-                        )}
-
-                        {/* Bio & Interests */}
-                        <section className="profile-details neo-card">
-                            <p className="bio-v3">"{currentUser.bio}"</p>
-                            <div className="interests-grid">
-                                {currentUser.interests?.map(i => (
-                                    <span key={i} className="interest-tag">#{i}</span>
-                                ))}
-                            </div>
-                            <div className="match-indicator">📍 {currentUser.college?.toUpperCase()}</div>
-                        </section>
-
-                        {/* Prompt 2 */}
-                        {currentUser.prompts?.[1] && (
-                            <section className="profile-prompt neo-card highlight">
-                                <span className="prompt-q">{currentUser.prompts[1].question}</span>
-                                <h2 className="prompt-a">{currentUser.prompts[1].answer}</h2>
-                            </section>
-                        )}
-
-                        {/* Action Buttons */}
-                        <div className="floating-actions">
-                            <button
-                                className={`action-btn skip ${actionFeedback === 'skip' ? 'active' : ''}`}
-                                onClick={() => handleAction('skip')}
-                            >❌</button>
-                            <button
-                                className={`action-btn like ${actionFeedback === 'like' ? 'active' : ''}`}
-                                onClick={() => handleAction('like')}
-                            >❤️</button>
-                        </div>
-
-                        {actionFeedback && (
-                            <div className={`feedback-overlay ${actionFeedback}`}>
-                                {actionFeedback === 'like' ? 'LIKED!' : 'PASS'}
-                            </div>
-                        )}
-                    </motion.div>
-                )}
-            </AnimatePresence>
-        </div>
+      <main className="page stack">
+        <div className="skeleton" style={{ height: 62, borderRadius: 16 }} />
+        <CardSkeleton />
+      </main>
     );
+  }
+
+  if (!data) {
+    return (
+      <main className="page">
+        <EmptyState
+          emoji="📡"
+          title="Couldn't reach MessMate"
+          body="Check your connection and try again."
+          action={<button className="btn btn--primary" onClick={() => load()}>Retry</button>}
+        />
+      </main>
+    );
+  }
+
+  // ── Locked into a match ───────────────────────────────────────────────────
+  if (data.state === 'matched' && data.matchData) {
+    const partner = data.matchData.user;
+    return (
+      <main className="page stack">
+        {header}
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="card stack">
+          <span className="chip chip--basil" style={{ alignSelf: 'flex-start' }}>🎉 Matched</span>
+          <div className="row">
+            <Avatar src={partner?.profilePic} name={partner?.name} size="lg" />
+            <div className="grow stack-sm" style={{ gap: 2 }}>
+              <h2>{partner?.name}{partner?.age ? `, ${partner.age}` : ''}</h2>
+              <p className="small muted capitalize">{partner?.college}</p>
+              <p className="small">
+                {mealLabel(data.matchData.mealTime)} · {friendlyDate(data.matchData.mealDate)}
+              </p>
+            </div>
+          </div>
+          {partner?.bio && <p className="muted">{partner.bio}</p>}
+          <button
+            className="btn btn--primary btn--block"
+            onClick={() => navigate(`/inbox/match/${data.matchData._id}`)}
+          >
+            💬 Message {partner?.name?.split(' ')[0]}
+            {data.unread > 0 && <span className="chip chip--tomato">{data.unread}</span>}
+          </button>
+          <div className="row">
+            <button className="btn btn--ghost grow" onClick={() => leaveMatch('complete')}>✅ Meal done</button>
+            <button className="btn btn--ghost grow" onClick={() => leaveMatch('unmatch')}>Unmatch</button>
+          </div>
+        </motion.div>
+      </main>
+    );
+  }
+
+  // ── Seated at a table ─────────────────────────────────────────────────────
+  if (data.state === 'in_community' && data.communityData) {
+    const t = data.communityData;
+    return (
+      <main className="page stack">
+        {header}
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="card stack">
+          <span className="chip chip--plum" style={{ alignSelf: 'flex-start' }}>👥 Your table</span>
+          <h2>{t.name}</h2>
+          {t.description && <p className="muted">{t.description}</p>}
+          {t.venue && <p className="small">📍 {t.venue}</p>}
+          <div className="row wrap">
+            {t.members?.map((m) => (
+              <div key={m._id} className="row" style={{ gap: 6 }}>
+                <Avatar src={m.profilePic} name={m.name} size="sm" />
+                <span className="small">{m.name?.split(' ')[0]}</span>
+              </div>
+            ))}
+          </div>
+          <p className="small muted">
+            {t.seatsLeft > 0 ? `${t.seatsLeft} seat${t.seatsLeft === 1 ? '' : 's'} still open` : 'Table is full'}
+          </p>
+          <button className="btn btn--primary btn--block" onClick={() => navigate(`/inbox/community/${t._id}`)}>
+            💬 Open table chat
+            {data.unread > 0 && <span className="chip chip--tomato">{data.unread}</span>}
+          </button>
+          <button className="btn btn--ghost btn--block" onClick={leaveTable}>Leave table</button>
+        </motion.div>
+      </main>
+    );
+  }
+
+  // ── Slot closed ───────────────────────────────────────────────────────────
+  if (data.slotStatus === 'closed') {
+    return (
+      <main className="page stack">
+        {header}
+        <EmptyState
+          emoji="⏰"
+          title="That meal has passed"
+          body="Pick the next slot and you're back in."
+          action={<p className="small muted">Tap the bar above to switch.</p>}
+        />
+      </main>
+    );
+  }
+
+  // ── The deck ──────────────────────────────────────────────────────────────
+  return (
+    <main className="page stack">
+      {header}
+
+      {data.expandedSearch && (
+        <div className="banner banner--warn">
+          Not many people in this slot yet — we widened your gender filter to fill the deck.
+        </div>
+      )}
+
+      <AnimatePresence mode="wait">
+        {!current ? (
+          <motion.div key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+            <EmptyState
+              emoji={feed.length ? '✅' : '🌱'}
+              title={feed.length ? "That's everyone for this slot" : 'Nobody here yet'}
+              body={
+                feed.length
+                  ? 'Start a table so people can come to you, or try the next meal.'
+                  : `Be the first for ${mealLabel(data.mealTime).toLowerCase()}. Open a table and people joining this slot will see it.`
+              }
+              action={
+                <div className="stack" style={{ width: '100%' }}>
+                  <button className="btn btn--primary btn--block" onClick={() => setCreating(true)}>
+                    👥 Start a table
+                  </button>
+                  {skipped > 0 && (
+                    <button className="btn btn--ghost btn--block" onClick={undo}>
+                      ↩︎ Undo my last pass
+                    </button>
+                  )}
+                </div>
+              }
+            />
+          </motion.div>
+        ) : current.kind === 'table' ? (
+          <TableCard key={current._id} table={current} busy={busy} onJoin={() => joinTable(current)} />
+        ) : (
+          <PersonCard
+            key={current._id}
+            person={current}
+            busy={busy}
+            canUndo={skipped > 0}
+            onUndo={undo}
+            onLike={() => like(current)}
+            onSkip={() => skip(current)}
+          />
+        )}
+      </AnimatePresence>
+
+      {current && (
+        <div className="row-between small muted">
+          <span>{index + 1} of {feed.length}</span>
+          <button className="btn btn--ghost btn--sm" onClick={() => setCreating(true)}>
+            👥 Start a table
+          </button>
+        </div>
+      )}
+
+      <CreateTable
+        open={creating}
+        slot={data}
+        onClose={() => setCreating(false)}
+        onCreated={async () => {
+          setCreating(false);
+          await load({ quiet: true });
+          refresh();
+        }}
+      />
+    </main>
+  );
 };
 
 export default Discover;

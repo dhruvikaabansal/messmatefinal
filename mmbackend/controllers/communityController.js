@@ -1,359 +1,378 @@
 /**
- * communityController.js — Slot-State-First architecture.
+ * communityController.js — group tables.
  *
- * ARCHITECTURE RULE:
- *   Every function must:
- *   1. Validate the slot is active (not expired)
- *   2. Fetch UserSlotState for the current user
- *   3. Decide action based on STATE — never by cross-querying collections
- *   4. Update UserSlotState after any action
- *
- * State is the single source of truth.
+ * A table is an open invitation to eat together for one slot. Anyone in the
+ * same college can create or join one; the old requirement that your
+ * preference groupSize be >= 3 before you could even look at tables is gone —
+ * it locked new users out of half the product on their first visit.
  */
 
+const mongoose = require("mongoose");
 const Community = require("../models/Community");
+const Message = require("../models/Message");
+const Preference = require("../models/Preference");
 const UserSlotState = require("../models/UserSlotState");
 const Like = require("../models/Like");
-const Preference = require("../models/Preference");
-const cosineSimilarity = require("../utils/cosineSimilarity");
-const { buildSlotId, isSlotActive, slotIdFromPref } = require("../utils/slotUtils");
+const User = require("../models/User");
 
-// ─── INTERNAL HELPERS ────────────────────────────────────────────────────────
+const { buildSlotId, isSlotActive, resolveSlotFromPref, MEAL_TYPES, isValidDateStr } = require("../utils/slotUtils");
+const { getOrCreateState, setState, buildTableDeck } = require("../services/feedService");
 
-/**
- * Get-or-create a UserSlotState document (upsert pattern, race-condition safe).
- */
-const getOrCreateState = async (userId, slotId) => {
-  return UserSlotState.findOneAndUpdate(
-    { userId, slotId },
-    { $setOnInsert: { userId, slotId, state: "idle" } },
-    { upsert: true, new: true }
-  );
-};
+const isId = (v) => mongoose.Types.ObjectId.isValid(v);
 
-/**
- * Set a user's state for a given slot.
- */
-const setState = async (userId, slotId, state, extra = {}) => {
-  return UserSlotState.findOneAndUpdate(
-    { userId, slotId },
-    { $set: { state, matchId: null, communityId: null, ...extra } },
-    { upsert: true, new: true }
-  );
-};
-
-/**
- * Resolve the slotId from the user's current preference.
- */
 const resolveSlot = async (userId) => {
   const pref = await Preference.findOne({ user: userId });
-  if (!pref) return { slotId: null, pref: null, error: "Set your meal preferences first." };
-  const slotId = slotIdFromPref(pref);
-  return { slotId, pref, error: null };
+  if (!pref) return { error: "Set your meal preferences first." };
+  const resolved = resolveSlotFromPref(pref);
+  if (resolved.healed) {
+    pref.mealDate = resolved.mealDate;
+    pref.mealTime = resolved.mealTime;
+    await pref.save();
+  }
+  return { slotId: resolved.slotId, pref, error: null };
 };
 
-// ─── BROWSE COMMUNITIES ────────────────────────────────────────────────────────
+/** Pending 1-on-1 likes are cleared when someone commits to a table. */
+const clearPendingLikes = (userId, slotId) =>
+  Like.updateMany(
+    { slotId, status: "pending", $or: [{ fromUser: userId }, { toUser: userId }] },
+    { $set: { status: "skipped" } }
+  );
 
-/**
- * GET /api/community
- * Returns communities for the user's current slot + college.
- * Ranked by interest similarity.
- * Also includes communities the user is already a member of.
- */
+// ─── BROWSE ─────────────────────────────────────────────────────────────────
+
 const browseCommunities = async (req, res) => {
   try {
-    const currentUser = req.user;
-
-    // Allow explicit override via query params (for UI flexibility)
     let slotId;
     if (req.query.mealTime && req.query.mealDate) {
+      if (!isValidDateStr(req.query.mealDate) || !MEAL_TYPES.includes(req.query.mealTime)) {
+        return res.status(400).json({ message: "Invalid slot." });
+      }
       slotId = buildSlotId(req.query.mealDate, req.query.mealTime);
     } else {
-      const { slotId: resolved, error } = await resolveSlot(currentUser._id);
-      if (error) return res.json({ communities: [] });
-      slotId = resolved;
+      const r = await resolveSlot(req.user._id);
+      if (r.error) return res.json({ communities: [], message: r.error });
+      slotId = r.slotId;
     }
 
-    // Fetch communities for this slot + college (or ones the user is already in)
-    const communities = await Community.find({
-      $or: [
-        { slotId, college: currentUser.college },
-        { slotId, members: currentUser._id }, // always show communities user is in, even different college
-      ],
-    })
-      .populate("members", "name profilePic age")
-      .populate("createdBy", "name profilePic");
+    const viewer = {
+      _id: req.user._id,
+      interests: req.user.interests,
+      college: req.user.college,
+    };
 
-    // Annotate with membership flags and sort by interest score
-    const enhanced = communities.map((c) => {
-      const isCreator = c.createdBy._id.toString() === currentUser._id.toString();
-      const isMember = c.members.some(
-        (m) => m._id.toString() === currentUser._id.toString()
-      );
-      const matchScore = cosineSimilarity(
-        currentUser.interests || [],
-        c.interests || []
-      );
-      return { ...c.toObject(), isCreator, isMember, matchScore };
+    // Tables the user is already in, shown first and never filtered out.
+    const mine = await Community.find({ slotId, members: req.user._id })
+      .populate("members", "name profilePic birthday")
+      .populate("createdBy", "name profilePic")
+      .lean();
+
+    const others = await buildTableDeck({ viewer, slotId });
+
+    return res.json({
+      slotId,
+      myTables: mine.map((c) => ({
+        ...c,
+        kind: "table",
+        isMember: true,
+        isCreator: c.createdBy?._id?.toString() === req.user._id.toString(),
+        seatsLeft: Math.max(0, c.maxMembers - (c.members || []).length),
+      })),
+      communities: others,
     });
-
-    // Show all matching communities (ranked by interest similarity)
-    const filtered = enhanced
-      .sort((a, b) => b.matchScore - a.matchScore);
-
-    return res.json({ communities: filtered });
-  } catch (error) {
-    console.error("[communityController] browseCommunities:", error);
-    res.status(500).json({ message: error.message });
+  } catch (err) {
+    console.error("[communityController] browseCommunities:", err);
+    return res.status(500).json({ message: "Couldn't load tables." });
   }
 };
 
-// ─── CREATE COMMUNITY ──────────────────────────────────────────────────────────
+// ─── CREATE ─────────────────────────────────────────────────────────────────
 
-/**
- * POST /api/community/create
- * Body: { name, mealTime, mealDate, description, interests, maxMembers }
- *
- * State rules:
- *   - Allowed:  idle, liked
- *   - Blocked:  matched, in_community
- */
 const createCommunity = async (req, res) => {
   try {
-    const { name, mealTime, mealDate, description, interests, maxMembers } = req.body;
+    const { name, description, interests, maxMembers, venue } = req.body;
     const userId = req.user._id;
 
-    if (!name || !mealTime || !mealDate) {
-      return res.status(400).json({ message: "name, mealTime, and mealDate are required." });
+    if (!name || String(name).trim().length < 2) {
+      return res.status(400).json({ message: "Give your table a name." });
     }
 
-    // 1. Build slotId
+    // The table always belongs to the slot the user is currently browsing —
+    // no separate date/meal pickers to get out of sync.
+    let mealDate = req.body.mealDate;
+    let mealTime = req.body.mealTime;
+    if (!isValidDateStr(mealDate) || !MEAL_TYPES.includes(mealTime)) {
+      const r = await resolveSlot(userId);
+      if (r.error) return res.status(400).json({ message: r.error });
+      mealDate = r.pref.mealDate;
+      mealTime = r.pref.mealTime;
+    }
+
     const slotId = buildSlotId(mealDate, mealTime);
-
-    // 2. Validate slot is active
     if (!isSlotActive(slotId)) {
-      return res.status(400).json({
+      return res.status(409).json({
         slotStatus: "closed",
-        message: `The ${mealTime} slot on ${mealDate} has already ended. Choose a future slot.`,
+        message: `The ${mealTime} slot on ${mealDate} has closed. Pick a later one.`,
       });
     }
 
-    // 3. Check state — only idle/liked can create
     const myState = await getOrCreateState(userId, slotId);
-    const pref = await Preference.findOne({ user: userId });
-
-    if (!pref || pref.groupSize < 3) {
-      return res.status(400).json({ 
-        message: "You must set your Ideal Group Size to 3 or 4 in Preferences to create a group meal. 🍱" 
-      });
-    }
-
     if (myState.state === "matched") {
-      return res.status(400).json({
-        message: "You have a 1-on-1 match for this slot! Complete or unmatch before creating a group. 🔒",
+      return res.status(409).json({
+        message: "You have a 1-on-1 match for this slot. Finish or unmatch first.",
       });
     }
     if (myState.state === "in_community") {
-      return res.status(400).json({
-        message: "You're already in a group for this slot! Leave it before creating a new one.",
+      return res.status(409).json({
+        message: "You're already at a table for this slot.",
+        communityId: myState.communityId,
       });
     }
 
-    // 4. Create the community
-    const newCommunity = await Community.create({
-      name,
+    const cap = Math.min(8, Math.max(2, Number(maxMembers) || 4));
+
+    const community = await Community.create({
+      name: String(name).trim().slice(0, 60),
       slotId,
       mealTime,
       mealDate,
-      college: req.user.college.toLowerCase(),
-      description: description || "",
-      interests: interests || [],
-      maxMembers: maxMembers || 4,
+      college: req.user.college,
+      description: String(description || "").slice(0, 200),
+      venue: String(venue || "").slice(0, 80),
+      interests: Array.isArray(interests) ? interests.slice(0, 8) : [],
+      maxMembers: cap,
       createdBy: userId,
       members: [userId],
     });
 
-    // 5. 🔥 Update creator's state → in_community
-    await setState(userId, slotId, "in_community", { communityId: newCommunity._id });
-
-    // 6. 🔥 🧹 MARKET CLEANUP: Automatically 'skip' all pending 1-1 likes for this slot
-    // to prevent ghost matching conflicts while in a community.
-    await Like.updateMany(
-      { slotId, $or: [{ fromUser: userId }, { toUser: userId }], status: "pending" },
-      { $set: { status: "skipped" } }
+    const claimed = await UserSlotState.findOneAndUpdate(
+      { userId, slotId, state: { $in: ["idle", "liked"] } },
+      { $set: { state: "in_community", communityId: community._id, matchId: null } },
+      { returnDocument: "after" }
     );
+    if (!claimed) {
+      await Community.findByIdAndDelete(community._id);
+      return res.status(409).json({ message: "Your status changed — refresh and try again." });
+    }
 
-    return res.status(201).json({
-      message: "Community created!",
-      community: newCommunity,
+    await clearPendingLikes(userId, slotId);
+    await Message.create({
+      threadType: "community",
+      threadId: community._id,
+      sender: userId,
+      kind: "system",
+      text: `${req.user.name} opened this table for ${mealTime}.`,
     });
-  } catch (error) {
-    console.error("[communityController] createCommunity:", error);
-    res.status(500).json({ message: error.message });
+
+    return res.status(201).json({ message: "Table created.", community });
+  } catch (err) {
+    console.error("[communityController] createCommunity:", err);
+    return res.status(500).json({ message: "Couldn't create that table." });
   }
 };
 
-// ─── JOIN COMMUNITY ────────────────────────────────────────────────────────────
+// ─── JOIN ───────────────────────────────────────────────────────────────────
 
-/**
- * POST /api/community/join
- * Body: { communityId }
- *
- * State rules:
- *   - Allowed:  idle, liked
- *   - Blocked:  matched, in_community
- */
 const joinCommunity = async (req, res) => {
   try {
     const { communityId } = req.body;
     const userId = req.user._id;
+    if (!isId(communityId)) return res.status(400).json({ message: "A valid table id is required." });
 
-    if (!communityId) {
-      return res.status(400).json({ message: "communityId is required." });
-    }
-
-    // 1. Find community
     const community = await Community.findById(communityId);
-    if (!community) {
-      return res.status(404).json({ message: "Community not found." });
+    if (!community) return res.status(404).json({ message: "That table no longer exists." });
+
+    if (community.college !== req.user.college) {
+      return res.status(403).json({ message: "That table is at another campus." });
+    }
+    if (!isSlotActive(community.slotId)) {
+      return res.status(409).json({ slotStatus: "closed", message: "That table's slot has closed." });
     }
 
-    const { slotId } = community;
-
-    // 2. Validate slot is still active
-    if (!isSlotActive(slotId)) {
-      return res.status(400).json({
-        slotStatus: "closed",
-        message: `This community's slot (${community.mealTime} on ${community.mealDate}) has already ended.`,
-      });
-    }
-
-    // 3. Check state — only idle/liked can join
-    const myState = await getOrCreateState(userId, slotId);
-    const pref = await Preference.findOne({ user: userId });
-
-    if (!pref || pref.groupSize < 3) {
-      return res.status(400).json({ 
-        message: "You must set your Ideal Group Size to 3 or 4 in Preferences to join a group meal. 🍱" 
-      });
-    }
-
+    const myState = await getOrCreateState(userId, community.slotId);
     if (myState.state === "matched") {
-      return res.status(400).json({
-        message: "You have a 1-on-1 match for this slot! You cannot join a group. 🔒",
-      });
+      return res.status(409).json({ message: "You have a 1-on-1 match for this slot." });
     }
     if (myState.state === "in_community") {
-      return res.status(400).json({
-        message: "You're already in a group for this slot! Leave it before joining another.",
+      return res.status(409).json({
+        message: "You're already at a table for this slot.",
+        communityId: myState.communityId,
       });
     }
 
-    // 4. Check capacity
-    if (community.members.length >= community.maxMembers) {
-      return res.status(400).json({ message: "This group is already full! 🍱" });
-    }
-
-    // 5. Check not already a member (edge case guard)
-    if (community.members.some((m) => m.toString() === userId.toString())) {
-      return res.status(400).json({ message: "You are already in this community." });
-    }
-
-    // 6. Add member
-    community.members.push(userId);
-    await community.save();
-
-    // 7. 🔥 Update user's state → in_community
-    await setState(userId, slotId, "in_community", { communityId: community._id });
-
-    // 8. 🔥 🧹 MARKET CLEANUP: Automatically 'skip' all pending 1-1 likes for this slot
-    // to prevent ghost matching conflicts while in a community.
-    await Like.updateMany(
-      { slotId, $or: [{ fromUser: userId }, { toUser: userId }], status: "pending" },
-      { $set: { status: "skipped" } }
+    // Claim the seat atomically — capacity is checked inside the same write, so
+    // two people racing for the last seat can't both get it.
+    //
+    // The guard is `members.<cap-1>` not existing, which is true exactly when
+    // the array is shorter than the cap. An `$expr` with `$size` would read
+    // more naturally but is unsupported on some MongoDB-compatible backends
+    // and cannot use an index; this form works everywhere.
+    const lastSeatIndex = `members.${community.maxMembers - 1}`;
+    const seated = await Community.findOneAndUpdate(
+      {
+        _id: communityId,
+        members: { $ne: userId },
+        [lastSeatIndex]: { $exists: false },
+      },
+      { $push: { members: userId } },
+      { returnDocument: "after" }
     );
+    if (!seated) {
+      return res.status(409).json({ message: "That table just filled up." });
+    }
 
-    return res.json({ message: "Joined successfully!", community });
-  } catch (error) {
-    console.error("[communityController] joinCommunity:", error);
-    res.status(500).json({ message: error.message });
+    // Confirm the seat actually stuck. On MongoDB the update above is atomic and
+    // this is a formality, but it costs one cheap read and makes the invariant
+    // hold even on backends with weaker single-document guarantees: if our push
+    // was lost, or two writers both landed and pushed us past the cap, we back
+    // out rather than telling someone they have a seat that isn't there.
+    const confirmed = await Community.findById(communityId).select("members maxMembers").lean();
+    const seatIndex = (confirmed?.members || []).findIndex(
+      (m) => m.toString() === userId.toString()
+    );
+    if (seatIndex === -1 || seatIndex >= confirmed.maxMembers) {
+      if (seatIndex >= 0) {
+        await Community.updateOne({ _id: communityId }, { $pull: { members: userId } });
+      }
+      return res.status(409).json({ message: "That table just filled up." });
+    }
+
+    const claimed = await UserSlotState.findOneAndUpdate(
+      { userId, slotId: community.slotId, state: { $in: ["idle", "liked"] } },
+      { $set: { state: "in_community", communityId: community._id, matchId: null } },
+      { returnDocument: "after" }
+    );
+    if (!claimed) {
+      await Community.updateOne({ _id: communityId }, { $pull: { members: userId } });
+      return res.status(409).json({ message: "Your status changed — refresh and try again." });
+    }
+
+    await clearPendingLikes(userId, community.slotId);
+    await Message.create({
+      threadType: "community",
+      threadId: community._id,
+      sender: userId,
+      kind: "system",
+      text: `${req.user.name} joined the table.`,
+    });
+
+    return res.json({ message: `You're in — see you at ${community.name}!`, community: seated });
+  } catch (err) {
+    console.error("[communityController] joinCommunity:", err);
+    return res.status(500).json({ message: "Couldn't join that table." });
   }
 };
 
-// ─── LEAVE COMMUNITY ───────────────────────────────────────────────────────────
+// ─── LEAVE ──────────────────────────────────────────────────────────────────
 
-/**
- * POST /api/community/leave
- * Body: { communityId }
- * Note: Creators must dissolve instead.
- */
 const leaveCommunity = async (req, res) => {
   try {
     const { communityId } = req.body;
     const userId = req.user._id;
+    if (!isId(communityId)) return res.status(400).json({ message: "A valid table id is required." });
 
     const community = await Community.findById(communityId);
-    if (!community) return res.status(404).json({ message: "Community not found." });
+    if (!community) return res.status(404).json({ message: "That table no longer exists." });
+    if (!community.members.some((m) => m.toString() === userId.toString())) {
+      return res.status(403).json({ message: "You're not at this table." });
+    }
 
-    if (community.createdBy.toString() === userId.toString()) {
-      return res.status(400).json({
-        message: "As the creator, you must dissolve the community instead of leaving it.",
+    const isCreator = community.createdBy.toString() === userId.toString();
+
+    // Creator leaving no longer forces a dissolve — the table survives and the
+    // longest-standing member takes it over. Losing your lunch plans because
+    // one person changed theirs was the worst moment in the old flow.
+    if (isCreator && community.members.length > 1) {
+      const successor = community.members.find((m) => m.toString() !== userId.toString());
+      community.createdBy = successor;
+    }
+
+    community.members = community.members.filter((m) => m.toString() !== userId.toString());
+
+    if (community.members.length === 0) {
+      await Community.findByIdAndDelete(communityId);
+      await Message.deleteMany({ threadType: "community", threadId: communityId });
+    } else {
+      await community.save();
+      await Message.create({
+        threadType: "community",
+        threadId: community._id,
+        sender: userId,
+        kind: "system",
+        text: `${req.user.name} left the table.`,
       });
     }
 
-    // Remove member
-    community.members = community.members.filter(
-      (m) => m.toString() !== userId.toString()
-    );
-    await community.save();
+    const hasPendingLike = await Like.findOne({
+      fromUser: userId,
+      slotId: community.slotId,
+      status: "pending",
+    });
+    await setState(userId, community.slotId, hasPendingLike ? "liked" : "idle");
 
-    // 🔥 Reset state → idle (check if they have any pending likes to set to "liked")
-    const hasLike = await Like.findOne({ fromUser: userId, slotId: community.slotId, status: "pending" });
-    const newState = hasLike ? "liked" : "idle";
-    await setState(userId, community.slotId, newState);
-
-    return res.json({ message: "Left successfully." });
-  } catch (error) {
-    console.error("[communityController] leaveCommunity:", error);
-    res.status(500).json({ message: error.message });
+    return res.json({ message: "You left the table." });
+  } catch (err) {
+    console.error("[communityController] leaveCommunity:", err);
+    return res.status(500).json({ message: "Couldn't leave that table." });
   }
 };
 
-// ─── DISSOLVE COMMUNITY ────────────────────────────────────────────────────────
+// ─── DISSOLVE ───────────────────────────────────────────────────────────────
 
-/**
- * DELETE /api/community/dissolve
- * Body: { communityId }
- * Only the creator can dissolve. Resets ALL members' states.
- */
 const dissolveCommunity = async (req, res) => {
   try {
     const { communityId } = req.body;
-    const userId = req.user._id;
+    if (!isId(communityId)) return res.status(400).json({ message: "A valid table id is required." });
 
     const community = await Community.findById(communityId);
-    if (!community) return res.status(404).json({ message: "Community not found." });
-
-    if (community.createdBy.toString() !== userId.toString()) {
-      return res.status(403).json({ message: "Only the creator can dissolve this community." });
+    if (!community) return res.status(404).json({ message: "That table no longer exists." });
+    if (community.createdBy.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: "Only the host can close this table." });
     }
 
-    const memberIds = community.members;
-    const { slotId } = community;
-
-    // Delete the community
     await Community.findByIdAndDelete(communityId);
-
-    // 🔥 Reset ALL members' states → idle
+    await Message.deleteMany({ threadType: "community", threadId: communityId });
     await UserSlotState.updateMany(
-      { communityId, slotId },
+      { communityId: community._id },
       { $set: { state: "idle", communityId: null } }
     );
 
-    return res.json({ message: "Community dissolved. All members have been freed." });
-  } catch (error) {
-    console.error("[communityController] dissolveCommunity:", error);
-    res.status(500).json({ message: error.message });
+    return res.json({ message: "Table closed. Everyone's free to match again." });
+  } catch (err) {
+    console.error("[communityController] dissolveCommunity:", err);
+    return res.status(500).json({ message: "Couldn't close that table." });
+  }
+};
+
+// ─── DETAIL ─────────────────────────────────────────────────────────────────
+
+const getCommunity = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!isId(id)) return res.status(400).json({ message: "Invalid table id." });
+
+    const community = await Community.findById(id)
+      .populate("members", "name profilePic birthday bio interests college")
+      .populate("createdBy", "name profilePic")
+      .lean();
+    if (!community) return res.status(404).json({ message: "That table no longer exists." });
+
+    const isMember = (community.members || []).some(
+      (m) => m._id.toString() === req.user._id.toString()
+    );
+
+    return res.json({
+      community: {
+        ...community,
+        isMember,
+        isCreator: community.createdBy?._id?.toString() === req.user._id.toString(),
+        seatsLeft: Math.max(0, community.maxMembers - (community.members || []).length),
+        isOpen: isSlotActive(community.slotId),
+      },
+    });
+  } catch (err) {
+    console.error("[communityController] getCommunity:", err);
+    return res.status(500).json({ message: "Couldn't load that table." });
   }
 };
 
@@ -363,4 +382,5 @@ module.exports = {
   joinCommunity,
   leaveCommunity,
   dissolveCommunity,
+  getCommunity,
 };

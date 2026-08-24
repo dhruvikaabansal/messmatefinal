@@ -1,135 +1,109 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import axios from 'axios';
-import api from '../services/api';
-import './Register.css';
+import { Link, useNavigate } from 'react-router-dom';
+import { errorMessage } from '../lib/api';
+import { useSession } from '../store/SessionContext';
+
+const COLLEGES = ['NIIT University', 'IIT Delhi', 'DTU', 'NSUT', 'SRCC', 'Other'];
 
 const Register = () => {
-    const [formData, setFormData] = useState({
-        name: '',
-        email: '',
-        password: '',
-        college: '',
-        otherCollege: ''
-    });
-    const [error, setError] = useState('');
-    const navigate = useNavigate();
+  const navigate = useNavigate();
+  const { signUp } = useSession();
 
-    const colleges = ["NIIT University", "IIT Delhi", "DTU", "NSUT", "SRCC", "Other"];
+  const [form, setForm] = useState({ name: '', email: '', password: '', college: '', otherCollege: '' });
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
 
-    React.useEffect(() => {
-        localStorage.removeItem('token');
-    }, []);
+  const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        setError('');
+  const submit = async (e) => {
+    e.preventDefault();
+    setError('');
 
-        // Email format validation
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(formData.email)) {
-            setError('Please enter a valid email address.');
-            return;
-        }
+    const college = form.college === 'Other' ? form.otherCollege.trim() : form.college;
+    if (!college) return setError('Tell us which college you’re at.');
+    if (form.password.length < 8) return setError('Use at least 8 characters for your password.');
 
-        // Password length validation
-        if (formData.password.length < 8) {
-            setError('Password must be at least 8 characters long.');
-            return;
-        }
+    setBusy(true);
+    try {
+      await signUp({ name: form.name, email: form.email, password: form.password, college });
+      navigate('/onboarding', { replace: true });
+    } catch (err) {
+      setError(errorMessage(err, 'Could not create your account.'));
+    } finally {
+      setBusy(false);
+    }
+  };
 
-        try {
-            const finalCollege = formData.college === 'Other' ? formData.otherCollege : formData.college;
-            const res = await api.post('/auth/register', {
-                ...formData,
-                college: finalCollege
-            });
-            localStorage.setItem('token', res.data.token);
-            navigate('/profile'); // Onboarding flow step 1
-        } catch (err) {
-            setError(err.response?.data?.message || 'Registration failed');
-        }
-    };
+  return (
+    <main className="page stack" style={{ maxWidth: 420, paddingTop: 48 }}>
+      <div className="stack-sm">
+        <span className="brand">MessMate 🍽️</span>
+        <h1>Create your account</h1>
+        <p className="muted">Takes a minute. You'll be matching for your next meal right after.</p>
+      </div>
 
-    return (
-        <div className="auth-container">
-            <div className="neo-card auth-card">
-                <h1>Join MessMate 🍽️</h1>
-                <p className="auth-subtitle">Find your perfect meal companion.</p>
-                
-                {error && <div className="error-box">{error}</div>}
+      {error && <div className="banner banner--error">{error}</div>}
 
-                <form onSubmit={handleSubmit}>
-                    <div className="form-group">
-                        <label>Name</label>
-                        <input 
-                            className="neo-input"
-                            type="text"
-                            placeholder="John Doe"
-                            value={formData.name}
-                            onChange={(e) => setFormData({...formData, name: e.target.value})}
-                            required
-                        />
-                    </div>
-                    <div className="form-group">
-                        <label>Email</label>
-                        <input 
-                            className="neo-input"
-                            type="email"
-                            placeholder="john@example.com"
-                            value={formData.email}
-                            onChange={(e) => setFormData({...formData, email: e.target.value})}
-                            required
-                        />
-                    </div>
-                    <div className="form-group">
-                        <label>Password</label>
-                        <input 
-                            className="neo-input"
-                            type="password"
-                            placeholder="••••••"
-                            value={formData.password}
-                            onChange={(e) => setFormData({...formData, password: e.target.value})}
-                            required
-                        />
-                    </div>
-                    <div className="form-group">
-                        <label>College</label>
-                        <select 
-                            className="neo-input"
-                            value={formData.college}
-                            onChange={(e) => setFormData({...formData, college: e.target.value})}
-                            required
-                        >
-                            <option value="">Select College</option>
-                            {colleges.map(c => <option key={c} value={c}>{c}</option>)}
-                        </select>
-                    </div>
-
-                    {formData.college === 'Other' && (
-                        <div className="form-group">
-                            <label>Specify College</label>
-                            <input 
-                                className="neo-input"
-                                type="text"
-                                value={formData.otherCollege}
-                                onChange={(e) => setFormData({...formData, otherCollege: e.target.value})}
-                                required
-                            />
-                        </div>
-                    )}
-
-                    <button type="submit" className="neo-btn neo-btn-primary w-full">
-                        Create Account
-                    </button>
-                </form>
-
-                <p className="auth-footer">
-                    Already have an account? <Link to="/login">Login</Link>
-                </p>
-            </div>
+      <form className="stack" onSubmit={submit}>
+        <div className="field">
+          <label className="label" htmlFor="name">Name</label>
+          <input id="name" className="input" value={form.name} onChange={set('name')} required maxLength={60} />
         </div>
-    );
+
+        <div className="field">
+          <label className="label" htmlFor="email">Email</label>
+          <input
+            id="email"
+            className="input"
+            type="email"
+            autoComplete="email"
+            value={form.email}
+            onChange={set('email')}
+            required
+          />
+        </div>
+
+        <div className="field">
+          <label className="label" htmlFor="password">Password</label>
+          <input
+            id="password"
+            className="input"
+            type="password"
+            autoComplete="new-password"
+            value={form.password}
+            onChange={set('password')}
+            required
+            minLength={8}
+          />
+          <span className="hint">At least 8 characters.</span>
+        </div>
+
+        <div className="field">
+          <label className="label" htmlFor="college">College</label>
+          <select id="college" className="select" value={form.college} onChange={set('college')} required>
+            <option value="">Select your college</option>
+            {COLLEGES.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <span className="hint">You'll only ever be shown people from here.</span>
+        </div>
+
+        {form.college === 'Other' && (
+          <div className="field">
+            <label className="label" htmlFor="other">Which one?</label>
+            <input id="other" className="input" value={form.otherCollege} onChange={set('otherCollege')} required />
+          </div>
+        )}
+
+        <button className="btn btn--primary btn--block" type="submit" disabled={busy}>
+          {busy ? 'Creating…' : 'Create account'}
+        </button>
+      </form>
+
+      <p className="center small">
+        Already here? <Link to="/login" style={{ fontWeight: 700, color: 'var(--tomato)' }}>Log in</Link>
+      </p>
+    </main>
+  );
 };
 
 export default Register;

@@ -1,123 +1,201 @@
 /**
  * slotUtils.js — Single source of truth for slot logic.
  *
- * A "slot" is a unique (date + mealType) combination.
+ * A "slot" is a unique (date + mealType) pair.
  * slotId format: "YYYY-MM-DD_mealType"  e.g. "2026-04-07_lunch"
  *
- * This utility is used by every controller and the cleanup job.
- * Cut-off hours MUST match the frontend mealTimeUtils.js exactly.
+ * Everything below is computed in Asia/Kolkata (IST, UTC+5:30) regardless of
+ * where the Node process runs. Cut-off hours MUST match the frontend
+ * mealTimeUtils.js exactly.
  */
 
-// Cut-off hour (24h format) — slot closes at this hour
+// Slot opens for discovery this many hours before the cut-off is irrelevant —
+// slots are open from the moment they exist until the cut-off hour passes.
 const SLOT_CUTOFFS = {
-  breakfast: 10, // 10:00 AM
-  lunch: 15,     // 3:00 PM
-  snacks: 18,    // 6:00 PM
-  dinner: 22,    // 10:00 PM
+  breakfast: 10, // closes 10:00 IST
+  lunch: 15, //     closes 15:00 IST
+  snacks: 18, //    closes 18:00 IST
+  dinner: 22, //    closes 22:00 IST
+};
+
+// Human labels used in API responses so the frontend never hardcodes them.
+const MEAL_LABELS = {
+  breakfast: { label: "Breakfast", emoji: "🍳", window: "7:00 – 10:00 AM" },
+  lunch: { label: "Lunch", emoji: "🍱", window: "12:00 – 3:00 PM" },
+  snacks: { label: "Snacks", emoji: "🥟", window: "4:00 – 6:00 PM" },
+  dinner: { label: "Dinner", emoji: "🍛", window: "7:00 – 10:00 PM" },
 };
 
 const MEAL_TYPES = ["breakfast", "lunch", "snacks", "dinner"];
 
+const IST_OFFSET_MS = (5 * 60 + 30) * 60 * 1000;
+
 /**
- * Build a canonical slotId string.
- * @param {string} date     - "YYYY-MM-DD"
- * @param {string} mealType - "breakfast" | "lunch" | "snacks" | "dinner"
- * @returns {string}        - e.g. "2026-04-07_lunch"
+ * Current wall-clock date/time in IST.
+ *
+ * Implementation note: `Date.now()` is already an absolute UTC epoch, so the
+ * ONLY adjustment needed is + 5:30. The previous version also added
+ * `getTimezoneOffset()`, which silently double-counted on any server whose
+ * local timezone was not UTC.
+ */
+const getISTNow = () => {
+  const istMs = Date.now() + IST_OFFSET_MS;
+  const d = new Date(istMs);
+  const year = d.getUTCFullYear();
+  const month = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  return {
+    dateStr: `${year}-${month}-${day}`,
+    hour: d.getUTCHours(),
+    minute: d.getUTCMinutes(),
+    /** minutes since IST midnight — useful for fine-grained countdowns */
+    minutesSinceMidnight: d.getUTCHours() * 60 + d.getUTCMinutes(),
+  };
+};
+
+/** Today's date string (YYYY-MM-DD) in IST. */
+const todayStr = () => getISTNow().dateStr;
+
+/** Shift an IST date string by N days. */
+const shiftDateStr = (dateStr, days) => {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const base = Date.UTC(y, m - 1, d);
+  const shifted = new Date(base + days * 24 * 60 * 60 * 1000);
+  return [
+    shifted.getUTCFullYear(),
+    String(shifted.getUTCMonth() + 1).padStart(2, "0"),
+    String(shifted.getUTCDate()).padStart(2, "0"),
+  ].join("-");
+};
+
+const isValidDateStr = (s) => typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s);
+
+/**
+ * Build a canonical slotId string. Throws on invalid input.
  */
 const buildSlotId = (date, mealType) => {
-  if (!date || !mealType) throw new Error("date and mealType are required to build a slotId");
-  if (!MEAL_TYPES.includes(mealType)) throw new Error(`Invalid mealType: ${mealType}`);
+  if (!isValidDateStr(date)) throw new Error(`Invalid meal date: ${date}`);
+  if (!MEAL_TYPES.includes(mealType)) throw new Error(`Invalid meal type: ${mealType}`);
   return `${date}_${mealType}`;
 };
 
-/**
- * Parse a slotId back into its parts.
- * @param {string} slotId - "2026-04-07_lunch"
- * @returns {{ date: string, mealType: string }}
- */
+/** Parse a slotId back into its parts. */
 const parseSlotId = (slotId) => {
-  const underscoreIdx = slotId.indexOf("_");
-  const date = slotId.substring(0, underscoreIdx);
-  const mealType = slotId.substring(underscoreIdx + 1);
-  return { date, mealType };
-};
-
-/**
- * Get current date and hour in IST (UTC+5:30).
- * This is timezone-safe regardless of where the Node.js server is hosted.
- * @returns {{ dateStr: string, hour: number }}
- */
-const getISTNow = () => {
-  const now = new Date();
-  // Convert to IST by adding 5 hours 30 minutes to UTC
-  const IST_OFFSET_MS = (5 * 60 + 30) * 60 * 1000;
-  const istMs = now.getTime() + now.getTimezoneOffset() * 60 * 1000 + IST_OFFSET_MS;
-  const istDate = new Date(istMs);
-  const year = istDate.getUTCFullYear();
-  const month = String(istDate.getUTCMonth() + 1).padStart(2, '0');
-  const day = String(istDate.getUTCDate()).padStart(2, '0');
+  const idx = String(slotId).indexOf("_");
+  if (idx === -1) return { date: null, mealType: null };
   return {
-    dateStr: `${year}-${month}-${day}`,
-    hour: istDate.getUTCHours(),
+    date: slotId.substring(0, idx),
+    mealType: slotId.substring(idx + 1),
   };
 };
 
 /**
- * Get the Date object at which a slot expires (for cleanup job use).
- * @param {string} slotId
- * @returns {Date} — UTC Date when the slot closes
+ * The absolute UTC instant a slot closes.
  */
 const getSlotExpiry = (slotId) => {
   const { date, mealType } = parseSlotId(slotId);
   const cutoffHour = SLOT_CUTOFFS[mealType];
-  // IST cutoff expressed as UTC: subtract 5:30
-  // e.g. dinner cutoff = IST 22:00 = UTC 16:30
-  const IST_OFFSET_MS = (5 * 60 + 30) * 60 * 1000;
-  const expiryIST = new Date(`${date}T${String(cutoffHour).padStart(2, '0')}:00:00Z`);
-  return new Date(expiryIST.getTime() - IST_OFFSET_MS);
+  if (!isValidDateStr(date) || cutoffHour === undefined) return new Date(0);
+  const asIfUtc = Date.parse(`${date}T${String(cutoffHour).padStart(2, "0")}:00:00Z`);
+  return new Date(asIfUtc - IST_OFFSET_MS);
 };
 
 /**
- * Check whether a slot is currently active (not yet expired).
- * Uses IST time explicitly — safe on any server timezone.
- * Mirrors the frontend isMealTimePassed() logic exactly.
- * @param {string} slotId
- * @returns {boolean} — true if active, false if closed
+ * Is this slot still open for discovery / matching?
  */
 const isSlotActive = (slotId) => {
   const { date, mealType } = parseSlotId(slotId);
   const cutoffHour = SLOT_CUTOFFS[mealType];
-  const { dateStr: todayIST, hour: currentHourIST } = getISTNow();
+  if (!isValidDateStr(date) || cutoffHour === undefined) return false;
 
-  if (date > todayIST) return true;  // Future date → always active
-  if (date < todayIST) return false; // Past date → always closed
-  // Same date → check if we've passed the cut-off hour
-  return currentHourIST < cutoffHour;
+  const { dateStr: today, hour } = getISTNow();
+  if (date > today) return true;
+  if (date < today) return false;
+  return hour < cutoffHour;
+};
+
+/** Minutes remaining before a slot closes (0 if already closed). */
+const minutesUntilSlotCloses = (slotId) => {
+  if (!isSlotActive(slotId)) return 0;
+  const ms = getSlotExpiry(slotId).getTime() - Date.now();
+  return Math.max(0, Math.round(ms / 60000));
 };
 
 /**
- * Build a slotId from a Preference document (user's currently selected meal settings).
- * @param {object} pref - Mongoose Preference document with mealDate + mealTime
- * @returns {string} slotId
+ * The next slot a user can realistically join, starting from "now" in IST.
+ * Walks forward through today's remaining meals, then tomorrow's.
  */
-const slotIdFromPref = (pref) => {
-  return buildSlotId(pref.mealDate, pref.mealTime);
+const nextOpenSlot = () => {
+  const today = todayStr();
+  for (const mealType of MEAL_TYPES) {
+    if (isSlotActive(buildSlotId(today, mealType))) {
+      return { mealDate: today, mealTime: mealType };
+    }
+  }
+  return { mealDate: shiftDateStr(today, 1), mealTime: MEAL_TYPES[0] };
 };
 
 /**
- * Get today's date string in YYYY-MM-DD format.
- * @returns {string}
+ * Build a slotId from a Preference document, self-healing when the stored
+ * date/meal has drifted into the past. Returns the corrected pair too, so the
+ * caller can persist the fix.
  */
-const todayStr = () => getISTNow().dateStr;
+const resolveSlotFromPref = (pref) => {
+  if (!pref) return null;
+  const candidateDate = isValidDateStr(pref.mealDate) ? pref.mealDate : todayStr();
+  const candidateMeal = MEAL_TYPES.includes(pref.mealTime) ? pref.mealTime : "lunch";
+  const slotId = buildSlotId(candidateDate, candidateMeal);
+
+  if (isSlotActive(slotId)) {
+    return { slotId, mealDate: candidateDate, mealTime: candidateMeal, healed: false };
+  }
+  const next = nextOpenSlot();
+  return {
+    slotId: buildSlotId(next.mealDate, next.mealTime),
+    mealDate: next.mealDate,
+    mealTime: next.mealTime,
+    healed: true,
+  };
+};
+
+/** All slots (today + tomorrow) with open/closed status — powers the slot picker. */
+const upcomingSlots = () => {
+  const today = todayStr();
+  const tomorrow = shiftDateStr(today, 1);
+  const out = [];
+  for (const date of [today, tomorrow]) {
+    for (const mealTime of MEAL_TYPES) {
+      const slotId = buildSlotId(date, mealTime);
+      out.push({
+        slotId,
+        mealDate: date,
+        mealTime,
+        isToday: date === today,
+        ...MEAL_LABELS[mealTime],
+        isOpen: isSlotActive(slotId),
+        minutesLeft: minutesUntilSlotCloses(slotId),
+      });
+    }
+  }
+  return out;
+};
 
 module.exports = {
   SLOT_CUTOFFS,
   MEAL_TYPES,
+  MEAL_LABELS,
   buildSlotId,
   parseSlotId,
   getISTNow,
   getSlotExpiry,
   isSlotActive,
-  slotIdFromPref,
+  minutesUntilSlotCloses,
+  nextOpenSlot,
+  resolveSlotFromPref,
+  upcomingSlots,
+  shiftDateStr,
+  isValidDateStr,
   todayStr,
+  // legacy alias kept so any straggling import keeps working
+  slotIdFromPref: (pref) => resolveSlotFromPref(pref)?.slotId,
 };

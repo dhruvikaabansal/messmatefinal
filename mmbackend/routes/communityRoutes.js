@@ -1,19 +1,22 @@
 const express = require("express");
-const { 
-  browseCommunities, 
-  createCommunity, 
+const router = express.Router();
+const {
+  browseCommunities,
+  createCommunity,
   joinCommunity,
   leaveCommunity,
-  dissolveCommunity
+  dissolveCommunity,
+  getCommunity,
 } = require("../controllers/communityController");
-const { protect } = require("../middleware/authMiddleware");
-
-const router = express.Router();
+const { protect, requireCompleteProfile } = require("../middleware/authMiddleware");
+const { actionLimiter } = require("../middleware/rateLimit");
 
 router.get("/", protect, browseCommunities);
-router.post("/create", protect, createCommunity);
-router.post("/join", protect, joinCommunity);
+router.get("/:id", protect, getCommunity);
+router.post("/create", protect, requireCompleteProfile, actionLimiter, createCommunity);
+router.post("/join", protect, requireCompleteProfile, actionLimiter, joinCommunity);
 router.post("/leave", protect, leaveCommunity);
 router.delete("/dissolve", protect, dissolveCommunity);
+router.post("/dissolve", protect, dissolveCommunity); // some clients can't send a DELETE body
 
 module.exports = router;

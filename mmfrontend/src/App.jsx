@@ -1,143 +1,82 @@
-import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
-import api from './services/api';
-import { AuthProvider } from './context/AuthContext';
+import React from 'react';
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
+
+import { SessionProvider, useSession } from './store/SessionContext';
+import { ToastProvider } from './lib/toast';
+import AppShell from './components/AppShell';
+
 import Landing from './pages/Landing';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import Onboarding from './pages/Onboarding';
 import Discover from './pages/Discover';
-import Profile from './pages/Profile';
-import Preferences from './pages/Preferences';
-import Matches from './pages/Matches';
-import LikesReceived from './pages/LikesReceived';
-import Home from './pages/Home';
-import Community from './pages/Community';
-import Navbar from './components/Navbar';
-import BottomNav from './components/BottomNav'; // 🔥 NEW
-import ProfilePreview from './pages/ProfilePreview';
+import Likes from './pages/Likes';
+import Inbox from './pages/Inbox';
+import Thread from './pages/Thread';
+import Me from './pages/Me';
 
-// Protect routes that require authentication
-const ProtectedRoute = ({ children }) => {
-  const token = localStorage.getItem('token');
-  if (!token) {
-    return <Navigate to="/login" replace />;
-  }
-  return children;
-};
+const Booting = () => (
+  <div className="page stack" style={{ paddingTop: 80, alignItems: 'center' }}>
+    <div className="spinner" />
+    <p className="muted small">Getting your table ready…</p>
+  </div>
+);
 
-// AuthRoute - Redirect to home if token exists BUT allow landing if no token
-const AuthRoute = ({ children }) => {
-  const token = localStorage.getItem('token');
-  if (token) {
-    return <Navigate to="/home" replace />;
-  }
-  return children;
-};
-
-// Navbar Wrapper to exclude it from Landing/Auth pages
-const LayoutWrapper = ({ children }) => {
+/** Signed-in only. Sends people to onboarding until their profile is usable. */
+const Private = ({ children, needsProfile = true }) => {
+  const { isReady, isAuthed, profileComplete } = useSession();
   const location = useLocation();
-  const token = localStorage.getItem('token');
-  
-  // Routes where we DON'T want the global Nav or Branding
-  const publicRoutes = ['/', '/login', '/register'];
-  // 🔥 Force a re-render check and ensure we don't show on profile setup if incomplete
-  const showNav = token && !publicRoutes.includes(location.pathname) && location.pathname !== '/profile';
 
-  return (
-    <>
-      {showNav && <Navbar />}
-      <div className="main-content-wrapper">
-        {children}
-      </div>
-      {showNav && <BottomNav />}
-    </>
-  );
+  if (!isReady) return <Booting />;
+  if (!isAuthed) return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  if (needsProfile && !profileComplete) return <Navigate to="/onboarding" replace />;
+  return children;
 };
 
-const DefaultRoute = () => {
-    const navigate = useNavigate();
-  
-    useEffect(() => {
-      const token = localStorage.getItem('token');
-      if (!token) {
-          navigate('/', { replace: true });
-          return;
-      }
-  
-      const check = async () => {
-        try {
-          // Standardize and Cache-bust the profile check
-          const profRes = await api.get(`/user/profile?t=${new Date().getTime()}`);
-          const pData = profRes.data.profile; 
-          
-          if (!pData || !pData.age || !pData.college || !pData.interests || pData.interests.length === 0 || !pData.profilePic) {
-            navigate('/profile', { replace: true });
-            return;
-          }
-          
-          try {
-            const prefRes = await api.get(`/preferences?t=${new Date().getTime()}`);
-            const prefData = prefRes.data?.preferences || prefRes.data; // handle both wrapped and raw response
-            const gSize = prefData?.groupSize || 2;
-            if (gSize >= 3) {
-                navigate('/community', { replace: true });
-            } else {
-                navigate('/home', { replace: true });
-            }
-          } catch (err) {
-            navigate('/preferences', { replace: true });
-          }
-        } catch (err) {
-          navigate('/profile', { replace: true });
-        }
-      };
-      
-      check();
-    }, [navigate]);
-  
-    return <div className="loader-container">Entering MessMate... 🍽️</div>;
+/** Signed-out only — keeps logged-in users out of the auth screens. */
+const Public = ({ children }) => {
+  const { isReady, isAuthed } = useSession();
+  if (!isReady) return <Booting />;
+  if (isAuthed) return <Navigate to="/discover" replace />;
+  return children;
 };
 
-function App() {
-  const [token, setToken] = useState(localStorage.getItem('token'));
+const Router = () => (
+  <AppShell>
+    <Routes>
+      <Route path="/" element={<Landing />} />
+      <Route path="/login" element={<Public><Login /></Public>} />
+      <Route path="/register" element={<Public><Register /></Public>} />
 
-  useEffect(() => {
-    const handleStorageChange = () => {
-      setToken(localStorage.getItem('token'));
-    };
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
-  }, []);
+      <Route path="/onboarding" element={<Private needsProfile={false}><Onboarding /></Private>} />
+      <Route path="/discover" element={<Private><Discover /></Private>} />
+      <Route path="/likes" element={<Private><Likes /></Private>} />
+      <Route path="/inbox" element={<Private><Inbox /></Private>} />
+      <Route path="/inbox/:threadType/:threadId" element={<Private><Thread /></Private>} />
+      <Route path="/me" element={<Private needsProfile={false}><Me /></Private>} />
 
-  return (
-    <AuthProvider>
-      <Router>
-        <LayoutWrapper>
-          <Routes>
-            {/* Public Routes */}
-            <Route path="/" element={<Landing />} />
-            <Route path="/login" element={<AuthRoute><Login /></AuthRoute>} />
-            <Route path="/register" element={<AuthRoute><Register /></AuthRoute>} />
-            
-            {/* Protected Routes */}
-            <Route path="/home" element={<ProtectedRoute><Home /></ProtectedRoute>} />
-            <Route path="/discover" element={<ProtectedRoute><Discover /></ProtectedRoute>} />
-            <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-            <Route path="/preferences" element={<ProtectedRoute><Preferences /></ProtectedRoute>} />
-            <Route path="/matches" element={<ProtectedRoute><Matches /></ProtectedRoute>} />
-            <Route path="/likes" element={<ProtectedRoute><LikesReceived /></ProtectedRoute>} />
-            <Route path="/community" element={<ProtectedRoute><Community /></ProtectedRoute>} />
-            <Route path="/profile/preview" element={<ProtectedRoute><ProfilePreview /></ProtectedRoute>} />
-            
-            {/* Fallback */}
-            <Route path="/start" element={<DefaultRoute />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </LayoutWrapper>
-      </Router>
-    </AuthProvider>
-  );
-}
+      {/* Old URLs people may have bookmarked or shared. */}
+      <Route path="/home" element={<Navigate to="/discover" replace />} />
+      <Route path="/matches" element={<Navigate to="/inbox" replace />} />
+      <Route path="/community" element={<Navigate to="/discover" replace />} />
+      <Route path="/preferences" element={<Navigate to="/me" replace />} />
+      <Route path="/profile" element={<Navigate to="/onboarding" replace />} />
+      <Route path="/profile/preview" element={<Navigate to="/me" replace />} />
+      <Route path="/start" element={<Navigate to="/discover" replace />} />
+
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  </AppShell>
+);
+
+const App = () => (
+  <BrowserRouter>
+    <SessionProvider>
+      <ToastProvider>
+        <Router />
+      </ToastProvider>
+    </SessionProvider>
+  </BrowserRouter>
+);
 
 export default App;
