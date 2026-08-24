@@ -16,3 +16,6 @@ mmbackend/uploads/*
 
 # Frontend dev tooling output
 mmfrontend/shots/
+
+# Telemetry/state files dropped by local test tooling
+state.json
