@@ -13,15 +13,18 @@
 @import url('https://fonts.googleapis.com/css2?family=Archivo+Black&family=Space+Grotesk:wght@500;600;700&family=Space+Mono:wght@700&display=swap');
 
 :root {
-  /* Brand */
-  --pink: #ff2d87;
-  --pink-deep: #d6006a;
-  --pink-pale: #ffd6e8;
+  /* Brand — Y2K bubblegum: candy pink, cyan, lime, violet, acid yellow */
+  --pink: #ff3d9a;
+  --pink-deep: #e0007a;
+  --pink-pale: #ffe0ef;
   --violet: #8b5cf6;
-  --acid: #ffe14d;
-  --mint: #00c48c;
-  --sky: #4ad9e4;
-  --ink: #100d0f;
+  --violet-pale: #ece4ff;
+  --acid: #ffe600;
+  --lime: #b8ff3d;
+  --mint: #00e5a0;
+  --sky: #38e1ff;
+  --sky-pale: #ddf8ff;
+  --ink: #0d0b0e;
 
   /* Legacy aliases so components keep working while the palette moves. */
   --tomato: var(--pink);
@@ -30,18 +33,19 @@
   --basil: var(--mint);
   --plum: var(--violet);
 
-  /* Surfaces — pale pink paper, not white */
-  --bg: #fff2f8;
-  --bg-alt: #ffe3f0;
+  /* Surfaces — white canvas, colour comes from the content */
+  --bg: #ffffff;
+  --bg-alt: #ffeef7;
   --surface: #ffffff;
-  --surface-2: #ffeaf4;
-  --line: #100d0f;
-  --line-soft: rgba(16, 13, 15, 0.16);
+  --surface-2: #ffe8f3;
+  --surface-3: #e6faff;
+  --line: #0d0b0e;
+  --line-soft: rgba(13, 11, 14, 0.18);
 
   /* Text */
-  --text: #100d0f;
-  --text-muted: #6b5560;
-  --text-invert: #fffafc;
+  --text: #0d0b0e;
+  --text-muted: #6c5b66;
+  --text-invert: #ffffff;
 
   /* Status */
   --success: #00a173;
@@ -60,12 +64,12 @@
   --shadow: 5px 5px 0 var(--line);
   --shadow-lg: 8px 8px 0 var(--line);
   --shadow-pink: 5px 5px 0 var(--pink);
-  --shadow-soft: 0 10px 30px rgba(16, 13, 15, 0.10);
+  --shadow-soft: 0 10px 30px rgba(13, 11, 14, 0.10);
 
   /* The faint grid behind everything — old-web graph paper. */
   --paper:
-    repeating-linear-gradient(0deg, rgba(16,13,15,0.045) 0 1px, transparent 1px 22px),
-    repeating-linear-gradient(90deg, rgba(16,13,15,0.045) 0 1px, transparent 1px 22px);
+    repeating-linear-gradient(0deg, rgba(255,61,154,0.09) 0 1px, transparent 1px 24px),
+    repeating-linear-gradient(90deg, rgba(255,61,154,0.09) 0 1px, transparent 1px 24px);
 
   /* Spacing scale */
   --s1: 4px;
@@ -87,28 +91,6 @@
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #14090f;
-    --bg-alt: #1e0f18;
-    --surface: #1d1119;
-    --surface-2: #2a1721;
-    --line: #ffe9f4;
-    --line-soft: rgba(255, 233, 244, 0.2);
-    --text: #ffeaf5;
-    --text-muted: #c49bb1;
-    --text-invert: #100d0f;
-    --pink-pale: #4a1030;
-    --shadow: 5px 5px 0 #ffe9f4;
-    --shadow-lg: 8px 8px 0 #ffe9f4;
-    --shadow-pink: 5px 5px 0 var(--pink);
-    --shadow-soft: 0 12px 34px rgba(0, 0, 0, 0.6);
-    --paper:
-      repeating-linear-gradient(0deg, rgba(255,233,244,0.05) 0 1px, transparent 1px 22px),
-      repeating-linear-gradient(90deg, rgba(255,233,244,0.05) 0 1px, transparent 1px 22px);
-  }
-}
-
 /* ── Reset ───────────────────────────────────────────────────────────────── */
 *,
 *::before,
@@ -116,7 +98,12 @@
 
 * { margin: 0; }
 
-html { -webkit-text-size-adjust: 100%; }
+html {
+  -webkit-text-size-adjust: 100%;
+  /* Pin the app to light. Without this the browser darkens form controls,
+     scrollbars and autofill for anyone whose OS is in dark mode. */
+  color-scheme: light;
+}
 
 body {
   font-family: var(--font-body);
@@ -219,6 +206,9 @@ h3 { font-size: 1.02rem; }
 
 .card--flat { box-shadow: none; }
 .card--pink { background: var(--pink-pale); }
+.card--sky { background: var(--sky-pale); }
+.card--violet { background: var(--violet-pale); }
+.card--acid { background: var(--acid); }
 .card--pop { box-shadow: var(--shadow-pink); border-color: var(--line); }
 .card--tint { background: var(--surface-2); }
 .card--pad-0 { padding: 0; overflow: hidden; }
@@ -254,6 +244,7 @@ h3 { font-size: 1.02rem; }
 .btn--accent { background: var(--acid); color: var(--ink); }
 .btn--go { background: var(--mint); color: var(--ink); }
 .btn--violet { background: var(--violet); color: #fff; }
+.btn--sky { background: var(--sky); color: var(--ink); }
 .btn--ghost { background: transparent; box-shadow: none; border-color: var(--line-soft); }
 .btn--ghost:hover:not(:disabled) { box-shadow: none; background: var(--surface-2); }
 .btn--danger { background: var(--danger); color: #fff; }
@@ -328,6 +319,7 @@ h3 { font-size: 1.02rem; }
 .chip--basil { background: var(--mint); color: var(--ink); }
 .chip--plum { background: var(--violet); color: #fff; }
 .chip--sky { background: var(--sky); color: var(--ink); }
+.chip--lime { background: var(--lime); color: var(--ink); }
 .chip--soft { background: var(--surface); box-shadow: none; border-color: var(--line-soft); font-weight: 600; }
 
 .chip-group { display: flex; flex-wrap: wrap; gap: var(--s2); }
@@ -564,6 +556,15 @@ h3 { font-size: 1.02rem; }
   background: var(--surface);
 }
 .step.done { background: var(--pink); }
+
+/* Holographic text — for one word in a headline, never a paragraph. */
+.holo {
+  background: linear-gradient(92deg, var(--pink) 0%, var(--violet) 34%, var(--sky) 66%, var(--lime) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
 
 /* ── Utility ─────────────────────────────────────────────────────────────── */
 .sr-only {

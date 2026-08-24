@@ -186,7 +186,7 @@ const Discover = () => {
     return (
       <main className="page stack">
         {header}
-        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="card stack">
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="card card--sky stack">
           <span className="chip chip--basil" style={{ alignSelf: 'flex-start' }}>🎉 Matched</span>
           <div className="row">
             <Avatar src={partner?.profilePic} name={partner?.name} size="lg" />

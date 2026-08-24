@@ -32,7 +32,7 @@ const Landing = () => {
         <span className="chip chip--saffron">🎓 Your campus only</span>
         <h1 style={{ fontSize: 'clamp(2.2rem, 8vw, 3.6rem)', maxWidth: 620 }}>
           Nobody should eat<br />
-          <span style={{ color: 'var(--tomato)' }}>lunch alone.</span>
+          <span className="holo">lunch alone.</span>
         </h1>
         <p className="muted" style={{ maxWidth: 520, fontSize: '1.05rem' }}>
           Say when you're eating. MessMate finds someone from your college who's free

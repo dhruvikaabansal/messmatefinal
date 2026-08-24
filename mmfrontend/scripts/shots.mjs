@@ -26,7 +26,7 @@ const PAGES = [
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/opt/pw-browsers/chromium' });
 const errors = [];
 
-for (const scheme of ['light', 'dark']) {
+for (const scheme of ['light', 'dark']) { // dark here means "OS in dark mode" — the app must still render light
   const ctx = await browser.newContext({
     viewport: { width: 420, height: 900 },
     deviceScaleFactor: 2,

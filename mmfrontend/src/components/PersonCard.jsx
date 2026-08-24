@@ -86,7 +86,7 @@ const PersonCard = ({ person, onLike, onSkip, onUndo, canUndo, busy }) => (
     )}
 
     {person.interests?.length > 0 && (
-      <div className="card stack-sm">
+      <div className="card card--violet stack-sm">
         <span className="eyebrow">Into</span>
         <div className="chip-group">
           {person.interests.map((i) => (
@@ -107,7 +107,7 @@ const PersonCard = ({ person, onLike, onSkip, onUndo, canUndo, busy }) => (
     )}
 
     {person.prompts?.[1] && (
-      <div className="card card--tint">
+      <div className="card card--sky">
         <div className="eyebrow">{person.prompts[1].question}</div>
         <h2 style={{ marginTop: 6 }}>{person.prompts[1].answer}</h2>
       </div>
