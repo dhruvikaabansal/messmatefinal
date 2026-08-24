@@ -128,14 +128,42 @@ const Onboarding = () => {
     return data.profile;
   };
 
-  const stepValid = useMemo(() => {
-    if (step === 0) return Boolean(form.name.trim() && form.birthday && form.gender);
-    if (step === 1) return form.interests.length >= 3 && form.bio.trim().length >= 10;
-    return true;
+  /**
+   * What's still missing on this step, in the words a person would use.
+   *
+   * The button used to sit greyed out with the requirement only in small grey
+   * text beside the field. People hit it, nothing happened, and there was
+   * nothing to tell them why — a silent dead end in the middle of signup. Now
+   * the button always works and says exactly what it wants.
+   */
+  const missing = useMemo(() => {
+    const gaps = [];
+    if (step === 0) {
+      if (!form.name.trim()) gaps.push('your name');
+      if (!form.birthday) gaps.push('your birthday');
+      if (!form.gender) gaps.push('your gender');
+    }
+    if (step === 1) {
+      const short = 3 - form.interests.length;
+      if (short > 0) gaps.push(`${short} more interest${short > 1 ? 's' : ''}`);
+      const bio = form.bio.trim().length;
+      if (bio === 0) gaps.push('a one-liner about you');
+      else if (bio < 10) gaps.push(`a few more words in your one-liner (${10 - bio} to go)`);
+    }
+    return gaps;
   }, [step, form]);
 
+  const stepValid = missing.length === 0;
+
   const next = async () => {
-    if (!stepValid) return;
+    if (!stepValid) {
+      const list =
+        missing.length === 1
+          ? missing[0]
+          : `${missing.slice(0, -1).join(', ')} and ${missing[missing.length - 1]}`;
+      toast.error(`Still need ${list}.`);
+      return;
+    }
     setSaving(true);
     try {
       await save();
@@ -270,7 +298,9 @@ const Onboarding = () => {
                 ))}
               </div>
               {form.interests.length < 3 && (
-                <span className="hint">Pick {3 - form.interests.length} more to continue.</span>
+                <span className="hint">
+                  Pick {3 - form.interests.length} more to continue.
+                </span>
               )}
             </div>
 
@@ -387,13 +417,30 @@ const Onboarding = () => {
         )}
       </motion.div>
 
+      {missing.length > 0 && (
+        <p className="hint" id="step-gaps" aria-live="polite" style={{ marginTop: -4 }}>
+          To continue, add {missing.join(' · ')}
+        </p>
+      )}
+
       <div className="row">
         {step > 0 && (
           <button className="btn btn--ghost" onClick={() => setStep((s) => s - 1)} disabled={saving}>
             Back
           </button>
         )}
-        <button className="btn btn--primary grow" onClick={next} disabled={!stepValid || saving}>
+        <button
+          className="btn btn--primary grow"
+          onClick={next}
+          disabled={saving}
+          // Deliberately NOT disabled when the step is incomplete — tapping it
+          // is how people ask "what do you want from me?", and it answers.
+          // aria-disabled is wrong here too: it would tell assistive tech the
+          // control is unavailable when it is in fact the way to get help.
+          // The gaps are announced via aria-describedby instead.
+          aria-describedby={stepValid ? undefined : 'step-gaps'}
+          style={stepValid ? undefined : { opacity: 0.72 }}
+        >
           {saving ? 'Saving…' : step === STEPS.length - 1 ? (editing ? 'Save' : 'Start matching') : 'Continue'}
         </button>
       </div>
