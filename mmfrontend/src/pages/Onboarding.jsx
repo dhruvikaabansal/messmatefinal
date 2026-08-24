@@ -41,7 +41,7 @@ const PROMPT_QUESTIONS = [
   'Two truths and a lie',
 ];
 
-const STEPS = ['You', 'Interests', 'Vibe'];
+const STEPS = ['You', 'Interests', 'Vibe', 'Who'];
 
 /**
  * Onboarding — three short steps, each of which saves as you go.
@@ -82,8 +82,18 @@ const Onboarding = () => {
   useEffect(() => {
     (async () => {
       try {
-        const { data } = await api.get('/user/profile');
-        const p = data.profile;
+        const [profileRes, prefRes] = await Promise.all([
+          api.get('/user/profile'),
+          api.get('/preferences'),
+        ]);
+        const p = profileRes.data.profile;
+        const pr = prefRes.data?.preference;
+        if (pr) {
+          setPrefs({
+            preferredGender: pr.preferredGender || 'any',
+            openTo: pr.openTo || 'both',
+          });
+        }
         setForm((f) => ({
           ...f,
           name: p.name || '',
@@ -108,8 +118,16 @@ const Onboarding = () => {
   }, [toast]);
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+  const setPref = (k, v) => setPrefs((p) => ({ ...p, [k]: v }));
 
   const [clubDraft, setClubDraft] = useState('');
+
+  /**
+   * Matching preferences live on a separate record from the profile, but they
+   * belong in signup: asking "who would you like to meet?" only on a settings
+   * page meant nobody was ever asked, and everyone silently got the defaults.
+   */
+  const [prefs, setPrefs] = useState({ preferredGender: 'any', openTo: 'both' });
 
   const sameClub = (a, b) => a.trim().toLowerCase() === b.trim().toLowerCase();
   const hasClub = (c) => form.clubs.some((x) => sameClub(x, c));
@@ -171,6 +189,8 @@ const Onboarding = () => {
     return data.profile;
   };
 
+  const savePrefs = () => api.put('/preferences', prefs);
+
   /**
    * What's still missing on this step, in the words a person would use.
    *
@@ -210,6 +230,7 @@ const Onboarding = () => {
     setSaving(true);
     try {
       await save();
+      if (step === STEPS.length - 1) await savePrefs();
       if (step < STEPS.length - 1) {
         setStep((s) => s + 1);
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -248,11 +269,13 @@ const Onboarding = () => {
           {step === 0 && (editing ? 'Your details' : 'Let’s set you up')}
           {step === 1 && 'What are you into?'}
           {step === 2 && 'How you eat'}
+          {step === 3 && "Who you'd like to meet"}
         </h1>
         <p className="muted">
           {step === 0 && 'This is what people see first. Keep it real — you’re meeting them at the mess.'}
           {step === 1 && 'Pick at least three. Rarer picks get you better matches than “music”.'}
           {step === 2 && 'Optional, but each one sharpens who we put in front of you.'}
+          {step === 3 && 'Change any of this later from your profile.'}
         </p>
       </div>
 
@@ -504,6 +527,69 @@ const Onboarding = () => {
                 }
                 maxLength={300}
               />
+            </div>
+          </>
+        )}
+
+        {step === 3 && (
+          <>
+            <div className="field">
+              <span className="label">Show me</span>
+              <div className="chip-group">
+                {[
+                  ['any', 'Everyone'],
+                  ['male', 'Men'],
+                  ['female', 'Women'],
+                  ['non-binary', 'Non-binary'],
+                ].map(([v, label]) => (
+                  <button
+                    key={v}
+                    type="button"
+                    className="chip chip-toggle"
+                    aria-pressed={prefs.preferredGender === v}
+                    onClick={() => setPref('preferredGender', v)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <span className="hint">
+                You only appear to people your filter includes, and they only appear to
+                you if their filter includes you — so an invite is never a dead end.
+              </span>
+            </div>
+
+            <div className="field">
+              <span className="label">In my feed</span>
+              <div className="chip-group">
+                {[
+                  ['both', 'People & tables'],
+                  ['solo', 'Just 1-on-1'],
+                  ['group', 'Just group tables'],
+                ].map(([v, label]) => (
+                  <button
+                    key={v}
+                    type="button"
+                    className="chip chip-toggle"
+                    aria-pressed={prefs.openTo === v}
+                    onClick={() => setPref('openTo', v)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <span className="hint">
+                A group table is an open invitation anyone can sit down at. Keeping both
+                on gives you the most to choose from.
+              </span>
+            </div>
+
+            <div className="card card--acid stack-sm">
+              <span className="eyebrow">One last thing</span>
+              <p className="small">
+                Matches last a single meal. When the slot closes, everything resets and
+                everyone goes back in the deck — so nothing you pick here is permanent.
+              </p>
             </div>
           </>
         )}
