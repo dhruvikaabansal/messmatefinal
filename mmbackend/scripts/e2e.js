@@ -217,6 +217,42 @@ const run = async () => {
       ) === false
     );
 
+    // ── CORS PREFLIGHT ──────────────────────────────────────────────────
+    // A browser sends OPTIONS before any cross-origin POST. If the server's
+    // allowedHeaders list is missing even one header the client sets, every
+    // single request fails with an opaque "Network Error" and no route is
+    // reachable. This shipped broken once; it does not get to happen twice.
+    section("CORS preflight");
+
+    // Every header src/lib/api.js puts on a request.
+    const CLIENT_HEADERS = ["content-type", "authorization", "cache-control"];
+
+    const preflight = await fetch(`${BASE}/api/auth/login`, {
+      method: "OPTIONS",
+      headers: {
+        Origin: "http://localhost:5173",
+        "Access-Control-Request-Method": "POST",
+        "Access-Control-Request-Headers": CLIENT_HEADERS.join(","),
+      },
+    });
+    check("preflight is accepted", preflight.status < 400, String(preflight.status));
+
+    const allowedHeader = (preflight.headers.get("access-control-allow-headers") || "").toLowerCase();
+    for (const h of CLIENT_HEADERS) {
+      check(`preflight allows "${h}"`, allowedHeader.includes(h), allowedHeader || "(no header)");
+    }
+    check(
+      "preflight echoes the origin",
+      (preflight.headers.get("access-control-allow-origin") || "").includes("localhost:5173"),
+      preflight.headers.get("access-control-allow-origin") || "(none)"
+    );
+
+    // And the real request, sent exactly as the browser client sends it.
+    const realCall = await fetch(`${BASE}/api/health`, {
+      headers: { Origin: "http://localhost:5173", "Cache-Control": "no-cache" },
+    });
+    check("a request carrying every client header succeeds", realCall.status === 200, String(realCall.status));
+
     // ── AUTH ────────────────────────────────────────────────────────────
     section("Auth");
     const bad = await api("POST", "/api/auth/register", {

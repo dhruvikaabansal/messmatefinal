@@ -68,7 +68,10 @@ app.use(
     },
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     credentials: true,
-    allowedHeaders: ["Content-Type", "Authorization"],
+    // Must list every header the client actually sends, or the browser's
+    // preflight fails and NOTHING works — the API client sets Cache-Control on
+    // each request to stop stale decks being served from cache.
+    allowedHeaders: ["Content-Type", "Authorization", "Cache-Control", "Pragma", "X-Requested-With"],
   })
 );
 
