@@ -35,10 +35,10 @@
   --plum: var(--violet);
 
   /* Surfaces — white canvas, colour comes from the content */
-  --bg: #fffdfb;
+  --bg: #ffeaf4;
   --bg-alt: #ffeef7;
   --surface: #ffffff;
-  --surface-2: #ffe8f3;
+  --surface-2: #ffe0ef;
   --surface-3: #e2fbff;
   --line: #1a1420;
   --line-soft: rgba(26, 20, 32, 0.18);
@@ -70,10 +70,10 @@
   /* The faint grid behind everything — old-web graph paper. */
   /* Candy dots + a soft wash of colour in the corners. Hand-made, not a grid. */
   --paper:
-    radial-gradient(circle at 1px 1px, rgba(255,79,168,0.16) 1.5px, transparent 0),
-    radial-gradient(900px 500px at 8% -5%, rgba(127,233,245,0.30), transparent 60%),
-    radial-gradient(700px 460px at 100% 0%, rgba(255,228,241,0.75), transparent 55%),
-    radial-gradient(700px 500px at 50% 105%, rgba(198,255,94,0.20), transparent 60%);
+    radial-gradient(circle at 1px 1px, rgba(224,0,122,0.14) 1.6px, transparent 0),
+    radial-gradient(820px 520px at 6% -8%, rgba(127,233,245,0.55), transparent 62%),
+    radial-gradient(760px 480px at 104% 2%, rgba(255,230,0,0.35), transparent 58%),
+    radial-gradient(820px 560px at 50% 108%, rgba(198,255,94,0.40), transparent 62%);
   --paper-size: 22px 22px, auto, auto, auto;
 
   /* Spacing scale */
@@ -207,6 +207,7 @@ h3 { font-size: 1.02rem; }
 /* ── Card ────────────────────────────────────────────────────────────────── */
 .card {
   background: var(--surface);
+  background-image: linear-gradient(180deg, rgba(255,255,255,0.9), rgba(255,224,239,0.55));
   border: var(--border);
   border-radius: var(--r-md);
   box-shadow: var(--shadow);
@@ -221,6 +222,57 @@ h3 { font-size: 1.02rem; }
 .card--pop { box-shadow: var(--shadow-pink); border-color: var(--line); }
 .card--tint { background: var(--surface-2); }
 .card--pad-0 { padding: 0; overflow: hidden; }
+
+/* ── Marquee ─────────────────────────────────────────────────────────────
+   A scrolling ticker. Pure 2003, and it gives the page a pulse without
+   asking anyone to interact with it. Stops dead under reduced-motion.
+   ------------------------------------------------------------------------ */
+.marquee {
+  overflow: hidden;
+  border-top: var(--border);
+  border-bottom: var(--border);
+  background: var(--pink);
+  color: #fff;
+  padding: 7px 0;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.marquee-track {
+  display: inline-flex;
+  gap: 2.5rem;
+  white-space: nowrap;
+  animation: marquee 26s linear infinite;
+  will-change: transform;
+}
+
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+/* ── Floating stickers — decoration that sits behind the content ───────── */
+.float-sticker {
+  position: absolute;
+  font-size: 2.2rem;
+  filter: drop-shadow(2px 3px 0 rgba(26, 20, 32, 0.25));
+  pointer-events: none;
+  user-select: none;
+  animation: bob 5s ease-in-out infinite;
+}
+
+@keyframes bob {
+  0%, 100% { transform: translateY(0) rotate(-6deg); }
+  50% { transform: translateY(-12px) rotate(6deg); }
+}
+
+/* Only on screens with margin to spare. On a phone they land on the text. */
+@media (max-width: 900px) {
+  .float-sticker { display: none; }
+}
 
 /* ── Windows ─────────────────────────────────────────────────────────────
    A card with a title bar and three little buttons. This single element is
