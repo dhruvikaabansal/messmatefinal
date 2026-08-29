@@ -6,8 +6,8 @@ import { Window } from '../components/ui';
 
 const STEPS = [
   { n: '1', emoji: '🍱', tone: 'sky', title: 'Pick your meal', body: 'Breakfast, lunch, snacks or dinner — today or tomorrow.' },
-  { n: '2', emoji: '👀', tone: 'butter', title: 'See who else is free', body: 'Only people from your campus, ranked by how well you actually fit.' },
-  { n: '3', emoji: '🤝', tone: 'lime', title: 'Invite or take a seat', body: 'Match 1-on-1, or join an open table. Then just show up.' },
+  { n: '2', emoji: '👀', tone: 'chrome', title: 'See who else is free', body: 'Only people from your campus, ranked by how well you actually fit.' },
+  { n: '3', emoji: '🤝', tone: 'pink', title: 'Invite or take a seat', body: 'Match 1-on-1, or join an open table. Then just show up.' },
 ];
 
 const TICKER = [
@@ -59,7 +59,7 @@ const Landing = () => {
         <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }}>
           <Window title="messmate.exe" tone="pink">
             <div className="stack" style={{ textAlign: 'center', alignItems: 'center', gap: 18 }}>
-              <span className="chip chip--saffron sticker">🎓 your campus only</span>
+              <span className="chip chip--sky sticker">🎓 your campus only</span>
 
               <h1 style={{ fontSize: 'clamp(2.1rem, 7.5vw, 3.4rem)', maxWidth: 620 }}>
                 Nobody should eat<br />
@@ -78,9 +78,9 @@ const Landing = () => {
 
               <div className="chip-group" style={{ justifyContent: 'center' }}>
                 <span className="chip chip--sky sticker">🍳 breakfast</span>
-                <span className="chip chip--saffron sticker--r">🍱 lunch</span>
-                <span className="chip chip--lime sticker">🥟 snacks</span>
-                <span className="chip chip--plum sticker--r">🍛 dinner</span>
+                <span className="chip chip--tomato sticker--r">🍱 lunch</span>
+                <span className="chip chip--sky sticker">🥟 snacks</span>
+                <span className="chip chip--tomato sticker--r">🍛 dinner</span>
               </div>
             </div>
           </Window>
@@ -122,14 +122,14 @@ const Landing = () => {
           ))}
         </div>
 
-        <Window title="the whole idea ♡" tone="violet">
+        <Window title="the whole idea ♡" tone="chrome">
           <div className="stack" style={{ textAlign: 'center', alignItems: 'center' }}>
             <h2>Every meal is a fresh start</h2>
             <p className="muted" style={{ maxWidth: 440 }}>
               Matches last one meal. Nothing carries over, nothing lingers, and everyone
               is back in the deck for the next slot.
             </p>
-            <Link to="/register" className="btn btn--accent">Get started — it's free 🎉</Link>
+            <Link to="/register" className="btn btn--primary">Get started — it's free 🎉</Link>
           </div>
         </Window>
 

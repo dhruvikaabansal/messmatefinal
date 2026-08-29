@@ -63,7 +63,7 @@ const PersonCard = ({ person, onLike, onSkip, onUndo, canUndo, busy }) => (
     </Window>
 
     {person.reasons?.length > 0 && (
-      <Window title="why you two ♡" tone="butter">
+      <Window title="why you two ♡" tone="sky">
         <div className="stack-sm">
           <div className="row-between">
             <span className="eyebrow">the overlap</span>
@@ -81,14 +81,14 @@ const PersonCard = ({ person, onLike, onSkip, onUndo, canUndo, busy }) => (
     )}
 
     {person.prompts?.[0] && (
-      <Window title="✎ prompt" tone="violet">
+      <Window title="✎ prompt" tone="chrome">
         <div className="eyebrow">{person.prompts[0].question}</div>
         <h2 style={{ marginTop: 6 }}>{person.prompts[0].answer}</h2>
       </Window>
     )}
 
     {person.interests?.length > 0 && (
-      <div className="card card--violet stack-sm">
+      <div className="card card--sky stack-sm">
         <span className="eyebrow">🍡 into</span>
         <div className="chip-group">
           {person.interests.map((i) => (
@@ -109,7 +109,7 @@ const PersonCard = ({ person, onLike, onSkip, onUndo, canUndo, busy }) => (
     )}
 
     {person.prompts?.[1] && (
-      <Window title="✎ prompt" tone="lime">
+      <Window title="✎ prompt" tone="chrome">
         <div className="eyebrow">{person.prompts[1].question}</div>
         <h2 style={{ marginTop: 6 }}>{person.prompts[1].answer}</h2>
       </Window>
