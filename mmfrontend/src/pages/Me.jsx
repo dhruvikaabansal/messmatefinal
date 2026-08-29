@@ -4,7 +4,7 @@ import api, { errorMessage } from '../lib/api';
 import { titleCase } from '../lib/format';
 import { useToast } from '../lib/toast';
 import { useSession } from '../store/SessionContext';
-import { RowSkeleton, SmartImg } from '../components/ui';
+import { RowSkeleton, SmartImg, Window } from '../components/ui';
 
 /**
  * Me — profile preview, matching preferences and account, on one screen.
@@ -85,7 +85,7 @@ const Me = () => {
       )}
 
       {/* ── Profile preview: exactly what others see ── */}
-      <div className="card card--pad-0">
+      <Window title="this is how you look ✿" tone="pink" flush>
         <div style={{ position: 'relative', aspectRatio: '4 / 5', background: 'var(--surface-2)' }}>
           <SmartImg
             src={profile.profilePic}
@@ -93,8 +93,8 @@ const Me = () => {
             alt=""
             style={{ width: '100%', height: '100%', objectFit: 'cover' }}
           />
-          <span className="chip chip--saffron" style={{ position: 'absolute', top: 12, left: 12 }}>
-            Preview
+          <span className="chip chip--saffron sticker" style={{ position: 'absolute', top: 12, left: 12 }}>
+            ✨ preview
           </span>
           <div
             style={{
@@ -111,9 +111,9 @@ const Me = () => {
             <p className="small capitalize" style={{ opacity: 0.9 }}>{profile.college}</p>
           </div>
         </div>
-      </div>
+      </Window>
 
-      {profile.bio && <div className="card"><p>{profile.bio}</p></div>}
+      {profile.bio && <div className="card card--tint"><p>{profile.bio}</p></div>}
 
       {profile.interests?.length > 0 && (
         <div className="chip-group">

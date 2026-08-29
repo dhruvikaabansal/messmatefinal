@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { titleCase } from '../lib/format';
-import { Reasons, ScorePill, SmartImg } from './ui';
+import { Reasons, ScorePill, SmartImg, Window } from './ui';
 
 /**
  * One person in the deck.
@@ -19,7 +19,7 @@ const PersonCard = ({ person, onLike, onSkip, onUndo, canUndo, busy }) => (
     transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
     className="stack"
   >
-    <div className="card card--pad-0">
+    <Window title={`${person.name.split(' ')[0]}.jpg`} tone="pink" flush>
       <div style={{ position: 'relative', aspectRatio: '4 / 5', background: 'var(--surface-2)' }}>
         <SmartImg
           src={person.profilePic}
@@ -28,7 +28,7 @@ const PersonCard = ({ person, onLike, onSkip, onUndo, canUndo, busy }) => (
         />
         {person.likedMe && (
           <span
-            className="chip chip--tomato"
+            className="chip chip--tomato sticker"
             style={{ position: 'absolute', top: 12, left: 12, boxShadow: 'var(--shadow)' }}
           >
             💘 Likes you
@@ -36,7 +36,7 @@ const PersonCard = ({ person, onLike, onSkip, onUndo, canUndo, busy }) => (
         )}
         {person.isActiveNow && (
           <span
-            className="chip chip--basil"
+            className="chip chip--basil sticker--r"
             style={{ position: 'absolute', top: 12, right: 12, boxShadow: 'var(--shadow)' }}
           >
             Active now
@@ -60,16 +60,18 @@ const PersonCard = ({ person, onLike, onSkip, onUndo, canUndo, busy }) => (
           </p>
         </div>
       </div>
-    </div>
+    </Window>
 
     {person.reasons?.length > 0 && (
-      <div className="card card--tint stack-sm">
-        <div className="row-between">
-          <span className="eyebrow">Why you two</span>
-          <ScorePill score={person.matchScore} />
+      <Window title="why you two ♡" tone="butter">
+        <div className="stack-sm">
+          <div className="row-between">
+            <span className="eyebrow">the overlap</span>
+            <ScorePill score={person.matchScore} />
+          </div>
+          <Reasons items={person.reasons} />
         </div>
-        <Reasons items={person.reasons} />
-      </div>
+      </Window>
     )}
 
     {person.bio && (
@@ -79,15 +81,15 @@ const PersonCard = ({ person, onLike, onSkip, onUndo, canUndo, busy }) => (
     )}
 
     {person.prompts?.[0] && (
-      <div className="card card--tint">
+      <Window title="✎ prompt" tone="violet">
         <div className="eyebrow">{person.prompts[0].question}</div>
         <h2 style={{ marginTop: 6 }}>{person.prompts[0].answer}</h2>
-      </div>
+      </Window>
     )}
 
     {person.interests?.length > 0 && (
       <div className="card card--violet stack-sm">
-        <span className="eyebrow">Into</span>
+        <span className="eyebrow">🍡 into</span>
         <div className="chip-group">
           {person.interests.map((i) => (
             <span key={i} className={`chip ${person.sharedInterests?.includes(i) ? 'chip--saffron' : 'chip--soft'}`}>
@@ -107,10 +109,10 @@ const PersonCard = ({ person, onLike, onSkip, onUndo, canUndo, busy }) => (
     )}
 
     {person.prompts?.[1] && (
-      <div className="card card--sky">
+      <Window title="✎ prompt" tone="lime">
         <div className="eyebrow">{person.prompts[1].question}</div>
         <h2 style={{ marginTop: 6 }}>{person.prompts[1].answer}</h2>
-      </div>
+      </Window>
     )}
 
     {person.outsideYourFilter && (

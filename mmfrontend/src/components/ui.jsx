@@ -35,6 +35,24 @@ export const Avatar = ({ src, name, size = 'md', online = false }) => (
   </div>
 );
 
+/**
+ * A card dressed as an old desktop window — title bar, three little buttons.
+ * `tone` picks the title-bar colour so a screen can vary without new CSS.
+ */
+export const Window = ({ title, tone = 'sky', flush = false, children, style, className = '' }) => (
+  <section className={`win ${className}`} style={style}>
+    <div className={`win-bar win-bar--${tone}`}>
+      <span>{title}</span>
+      <span className="win-dots" aria-hidden>
+        <i className="win-dot" />
+        <i className="win-dot" />
+        <i className="win-dot" />
+      </span>
+    </div>
+    <div className={`win-body ${flush ? 'win-body--flush' : ''}`}>{children}</div>
+  </section>
+);
+
 export const Skeleton = ({ h = 16, w = '100%', r = 8, style }) => (
   <div className="skeleton" style={{ height: h, width: w, borderRadius: r, ...style }} />
 );

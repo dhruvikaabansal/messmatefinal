@@ -52,7 +52,7 @@ const SlotSwitcher = ({ slot, slots = [], onChanged }) => {
             </span>
           </span>
         </span>
-        <span className="chip chip--soft">Change</span>
+        <span className="chip chip--sky">change ⏰</span>
       </button>
 
       <Sheet open={open} onClose={() => setOpen(false)} title="When are you eating?">

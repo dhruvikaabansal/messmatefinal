@@ -14,17 +14,18 @@
 
 :root {
   /* Brand — Y2K bubblegum: candy pink, cyan, lime, violet, acid yellow */
-  --pink: #ff3d9a;
+  --pink: #ff4fa8;
   --pink-deep: #e0007a;
-  --pink-pale: #ffe0ef;
-  --violet: #8b5cf6;
+  --pink-pale: #ffe4f1;
+  --violet: #9b7cf6;
   --violet-pale: #ece4ff;
   --acid: #ffe600;
-  --lime: #b8ff3d;
-  --mint: #00e5a0;
-  --sky: #38e1ff;
-  --sky-pale: #ddf8ff;
-  --ink: #0d0b0e;
+  --butter: #fff6b8;
+  --lime: #c6ff5e;
+  --mint: #6ef2c4;
+  --sky: #7fe9f5;
+  --sky-pale: #e2fbff;
+  --ink: #1a1420;
 
   /* Legacy aliases so components keep working while the palette moves. */
   --tomato: var(--pink);
@@ -34,17 +35,17 @@
   --plum: var(--violet);
 
   /* Surfaces — white canvas, colour comes from the content */
-  --bg: #ffffff;
+  --bg: #fffdfb;
   --bg-alt: #ffeef7;
   --surface: #ffffff;
   --surface-2: #ffe8f3;
-  --surface-3: #e6faff;
-  --line: #0d0b0e;
-  --line-soft: rgba(13, 11, 14, 0.18);
+  --surface-3: #e2fbff;
+  --line: #1a1420;
+  --line-soft: rgba(26, 20, 32, 0.18);
 
   /* Text */
-  --text: #0d0b0e;
-  --text-muted: #6c5b66;
+  --text: #1a1420;
+  --text-muted: #7a6478;
   --text-invert: #ffffff;
 
   /* Status */
@@ -54,9 +55,9 @@
   --info: #6d28d9;
 
   /* Shape — brutalism means corners, not pillows */
-  --r-sm: 3px;
-  --r-md: 5px;
-  --r-lg: 8px;
+  --r-sm: 8px;
+  --r-md: 14px;
+  --r-lg: 20px;
   --r-full: 999px;
 
   --border: 3px solid var(--line);
@@ -67,9 +68,13 @@
   --shadow-soft: 0 10px 30px rgba(13, 11, 14, 0.10);
 
   /* The faint grid behind everything — old-web graph paper. */
+  /* Candy dots + a soft wash of colour in the corners. Hand-made, not a grid. */
   --paper:
-    repeating-linear-gradient(0deg, rgba(255,61,154,0.09) 0 1px, transparent 1px 24px),
-    repeating-linear-gradient(90deg, rgba(255,61,154,0.09) 0 1px, transparent 1px 24px);
+    radial-gradient(circle at 1px 1px, rgba(255,79,168,0.16) 1.5px, transparent 0),
+    radial-gradient(900px 500px at 8% -5%, rgba(127,233,245,0.30), transparent 60%),
+    radial-gradient(700px 460px at 100% 0%, rgba(255,228,241,0.75), transparent 55%),
+    radial-gradient(700px 500px at 50% 105%, rgba(198,255,94,0.20), transparent 60%);
+  --paper-size: 22px 22px, auto, auto, auto;
 
   /* Spacing scale */
   --s1: 4px;
@@ -109,6 +114,8 @@ body {
   font-family: var(--font-body);
   background-color: var(--bg);
   background-image: var(--paper);
+  background-size: var(--paper-size);
+  background-attachment: fixed;
   color: var(--text);
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
@@ -140,9 +147,11 @@ h1, h2, h3, h4 {
   font-family: var(--font-display);
   font-weight: 400; /* Archivo Black ships one weight, and it is heavy */
   line-height: 1.05;
-  letter-spacing: -0.015em;
-  text-transform: uppercase;
+  letter-spacing: -0.02em;
 }
+
+/* Opt-in shout, for the few places that earn it. */
+.shout { text-transform: uppercase; letter-spacing: 0.01em; }
 
 h1 { font-size: clamp(1.8rem, 6vw, 2.6rem); }
 h2 { font-size: clamp(1.25rem, 3.8vw, 1.6rem); }
@@ -213,6 +222,57 @@ h3 { font-size: 1.02rem; }
 .card--tint { background: var(--surface-2); }
 .card--pad-0 { padding: 0; overflow: hidden; }
 
+/* ── Windows ─────────────────────────────────────────────────────────────
+   A card with a title bar and three little buttons. This single element is
+   what stops the app reading as a generic template — it says "someone made
+   this on purpose" before a word has been read.
+   ------------------------------------------------------------------------ */
+.win {
+  background: var(--surface);
+  border: var(--border);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.win-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: 7px 10px;
+  border-bottom: var(--border);
+  background: linear-gradient(180deg, var(--sky) 0%, #4fd8ec 100%);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+.win-bar--pink { background: linear-gradient(180deg, #ffa8d4 0%, var(--pink) 100%); color: #fff; }
+.win-bar--lime { background: linear-gradient(180deg, #ddff9e 0%, var(--lime) 100%); }
+.win-bar--violet { background: linear-gradient(180deg, #c9b6ff 0%, var(--violet) 100%); color: #fff; }
+.win-bar--butter { background: linear-gradient(180deg, #fffce0 0%, var(--acid) 100%); }
+
+.win-dots { display: flex; gap: 4px; margin-left: auto; }
+
+.win-dot {
+  width: 13px;
+  height: 13px;
+  border: 2px solid var(--ink);
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.85);
+}
+
+.win-body { padding: var(--s4); }
+.win-body--flush { padding: 0; }
+
+/* ── Stickers — things that look placed by hand, slightly crooked ──────── */
+.sticker { transform: rotate(-2.5deg); }
+.sticker--r { transform: rotate(2deg); }
+.sticker--big { transform: rotate(-4deg); }
+
 /* ── Buttons ─────────────────────────────────────────────────────────────── */
 .btn {
   display: inline-flex;
@@ -224,9 +284,8 @@ h3 { font-size: 1.02rem; }
   font-weight: 400;
   font-size: 0.88rem;
   letter-spacing: 0.02em;
-  text-transform: uppercase;
   border: var(--border);
-  border-radius: var(--r-sm);
+  border-radius: var(--r-full);
   background: var(--surface);
   color: var(--text);
   box-shadow: var(--shadow);
@@ -236,9 +295,18 @@ h3 { font-size: 1.02rem; }
   -webkit-tap-highlight-color: transparent;
 }
 
-.btn:hover:not(:disabled) { transform: translate(-2px, -2px); box-shadow: 7px 7px 0 var(--line); }
+.btn:hover:not(:disabled) { transform: translate(-2px, -2px) rotate(-0.6deg); box-shadow: 7px 7px 0 var(--line); }
 .btn:active:not(:disabled) { transform: translate(3px, 3px); box-shadow: 1px 1px 0 var(--line); }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: var(--shadow); }
+
+/* The glossy top-half highlight is the whole trick — one inset shadow. */
+.btn--primary,
+.btn--accent,
+.btn--go,
+.btn--violet,
+.btn--sky {
+  box-shadow: var(--shadow), inset 0 8px 0 rgba(255, 255, 255, 0.34);
+}
 
 .btn--primary { background: var(--pink); color: #fff; }
 .btn--accent { background: var(--acid); color: var(--ink); }
@@ -306,7 +374,7 @@ h3 { font-size: 1.02rem; }
   gap: 0.3rem;
   padding: 0.32rem 0.7rem;
   border: var(--border-thin);
-  border-radius: var(--r-sm);
+  border-radius: var(--r-full);
   background: var(--surface-2);
   box-shadow: 2px 2px 0 var(--line);
   font-size: 0.78rem;
@@ -329,7 +397,8 @@ h3 { font-size: 1.02rem; }
   cursor: pointer;
   transition: transform 0.1s var(--ease), background 0.1s;
 }
-.chip-toggle:active { transform: scale(0.96); }
+.chip-toggle:hover { transform: rotate(-1.5deg); }
+.chip-toggle:active { transform: scale(0.94); }
 .chip-toggle[aria-pressed='true'] {
   background: var(--pink);
   color: #fff;
@@ -400,6 +469,11 @@ h3 { font-size: 1.02rem; }
   background: var(--surface);
   border-top: 3px solid var(--line);
   padding-bottom: env(safe-area-inset-bottom, 0);
+  background-image: linear-gradient(90deg,
+    var(--pink) 0 25%, var(--acid) 25% 50%, var(--mint) 50% 75%, var(--sky) 75% 100%);
+  background-size: 100% 5px;
+  background-repeat: no-repeat;
+  background-position: top;
 }
 
 .tab {

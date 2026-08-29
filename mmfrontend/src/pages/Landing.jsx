@@ -29,7 +29,7 @@ const Landing = () => {
         className="stack"
         style={{ textAlign: 'center', alignItems: 'center', gap: 20 }}
       >
-        <span className="chip chip--saffron">🎓 Your campus only</span>
+        <span className="chip chip--saffron sticker">🎓 your campus only</span>
         <h1 style={{ fontSize: 'clamp(2.2rem, 8vw, 3.6rem)', maxWidth: 620 }}>
           Nobody should eat<br />
           <span className="holo">lunch alone.</span>
@@ -43,10 +43,10 @@ const Landing = () => {
           <Link to="/login" className="btn btn--ghost">I already have an account</Link>
         </div>
         <div className="chip-group" style={{ justifyContent: 'center' }}>
-          <span className="chip chip--soft">Same campus</span>
-          <span className="chip chip--soft">One plan per meal</span>
-          <span className="chip chip--soft">Solo or group</span>
-          <span className="chip chip--soft">Free</span>
+          <span className="chip chip--sky sticker">🍳 breakfast</span>
+          <span className="chip chip--saffron sticker--r">🍱 lunch</span>
+          <span className="chip chip--lime sticker">🥟 snacks</span>
+          <span className="chip chip--plum sticker--r">🍛 dinner</span>
         </div>
       </motion.section>
 
